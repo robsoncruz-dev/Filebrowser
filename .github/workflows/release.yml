@@ -1,0 +1,131 @@
+name: Build and Publish Linux Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # Allows manual trigger for testing
+
+jobs:
+  build_packages:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Ruby and FPM
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rubygems build-essential
+          sudo gem install fpm
+
+      - name: Prepare Package Payload (FPM)
+        run: |
+          mkdir -p deb_build/usr/bin
+          mkdir -p deb_build/usr/share/filebrowser
+          mkdir -p deb_build/usr/share/applications
+          
+          # Copy source code
+          cp -r src deb_build/usr/share/filebrowser/
+          
+          # Create wrapper executable
+          cat << 'EOF' > deb_build/usr/bin/filebrowser
+          #!/bin/bash
+          export PYTHONPATH="/usr/share/filebrowser"
+          exec python3 -m src.main "$@"
+          EOF
+          chmod +x deb_build/usr/bin/filebrowser
+          
+          # Create .desktop entry
+          cat << 'EOF' > deb_build/usr/share/applications/filebrowser.desktop
+          [Desktop Entry]
+          Name=Filebrowser
+          Comment=Launcher de PDFs estilo Spotlight para Linux
+          Exec=/usr/bin/filebrowser
+          Icon=document-open
+          Type=Application
+          Categories=Utility;Office;
+          Keywords=pdf;search;finder;documents;
+          StartupNotify=false
+          Terminal=false
+          EOF
+
+      - name: Build Debian Package (.deb)
+        run: |
+          fpm -s dir -t deb \
+            -n filebrowser \
+            -v ${{ github.event.release.tag_name || '0.2.0' }} \
+            -a all \
+            -d "python3 (>= 3.10)" \
+            -d "python3-gi" \
+            -d "gir1.2-gtk-4.0" \
+            -m "Robson Cruz <robsoncruz.dev@gmail.com>" \
+            --description "Launcher de PDFs estilo Spotlight para Linux" \
+            -f \
+            -C deb_build .
+
+      - name: Build RPM Package (.rpm)
+        run: |
+          fpm -s dir -t rpm \
+            -n filebrowser \
+            -v ${{ github.event.release.tag_name || '0.2.0' | sed 's/^v//' }} \
+            -a noarch \
+            -d "python3 >= 3.10" \
+            -d "python3-gobject" \
+            -d "gtk4" \
+            -m "Robson Cruz <robsoncruz.dev@gmail.com>" \
+            --description "Launcher de PDFs estilo Spotlight para Linux" \
+            -f \
+            -C deb_build .
+
+      - name: Build AppImage (.AppImage)
+        run: |
+          pip install python-appimage
+          
+          mkdir -p AppDir/opt/filebrowser
+          cp -r src AppDir/opt/filebrowser/
+          
+          python-appimage build app --python-version 3.10 AppDir
+          
+          cat << 'EOF' > AppDir/AppRun
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          export PYTHONPATH="${HERE}/opt/filebrowser:${PYTHONPATH}"
+          exec "${HERE}/opt/python3.10/bin/python3" -m src.main "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
+          cat << 'EOF' > AppDir/filebrowser.desktop
+          [Desktop Entry]
+          Name=Filebrowser
+          Comment=Launcher de PDFs estilo Spotlight para Linux
+          Exec=AppRun
+          Icon=document-open
+          Type=Application
+          Categories=Utility;Office;
+          EOF
+          
+          touch AppDir/document-open.svg
+          
+          wget -qO linuxdeploy-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          
+          ./linuxdeploy-x86_64.AppImage --appdir "AppDir" --output appimage \
+              --desktop-file "AppDir/filebrowser.desktop" \
+              --icon-file "AppDir/document-open.svg"
+          
+          mv Filebrowser*.AppImage Filebrowser-${{ github.event.release.tag_name || '0.2.0' }}-x86_64.AppImage
+
+      - name: Upload Release Assets
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.deb
+            *.rpm
+            *.AppImage
