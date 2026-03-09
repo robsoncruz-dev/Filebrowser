@@ -29,7 +29,21 @@ Encontre qualquer PDF no seu sistema em milissegundos. Pressione um atalho de te
 | Zathura *(recomendado)* | `zathura zathura-pdf-mupdf` | `zathura` |
 | rclone *(opcional)* | `rclone` | `rclone` |
 
-### Instalar
+### Método 1: O Mais Fácil (Recomendado)
+
+Se você quer a experiência mais simples possível, baixe os pacotes prontos na página de **Releases** do GitHub:
+
+#### 🟢 Ubuntu, Linux Mint, Pop!_OS, Debian
+Baixe o arquivo **`.deb`** e dê um clique duplo. A loja de aplicativos do seu sistema vai abrir e você só precisa clicar em **"Instalar"**.
+
+#### 🔵 Qualquer outro Linux (Fedora, Arch Linux, etc)
+Baixe o arquivo **`.AppImage`**. Clique com o botão direito nele, vá em **Propriedades → Permissões** e marque "Permitir execução como programa". Depois, basta dar dois cliques para abrir!
+
+---
+
+### Método 2: Instalação Manual via Terminal (Avançado)
+
+Se preferir instalar direto do código fonte:
 
 ```bash
 git clone https://github.com/robsoncruz-dev/filebrowser.git
