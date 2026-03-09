@@ -8,7 +8,9 @@ on:
 jobs:
   build_packages:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+      
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -57,9 +59,11 @@ jobs:
 
       - name: Build Debian Package (.deb)
         run: |
+          VERSION="${{ github.event.release.tag_name || '0.2.0' }}"
+          VERSION="${VERSION#v}"
           fpm -s dir -t deb \
             -n filebrowser \
-            -v ${{ github.event.release.tag_name || '0.2.0' }} \
+            -v "$VERSION" \
             -a all \
             -d "python3 (>= 3.10)" \
             -d "python3-gi" \
@@ -71,9 +75,11 @@ jobs:
 
       - name: Build RPM Package (.rpm)
         run: |
+          VERSION="${{ github.event.release.tag_name || '0.2.0' }}"
+          VERSION="${VERSION#v}"
           fpm -s dir -t rpm \
             -n filebrowser \
-            -v ${{ github.event.release.tag_name || '0.2.0' | sed 's/^v//' }} \
+            -v "$VERSION" \
             -a noarch \
             -d "python3 >= 3.10" \
             -d "python3-gobject" \
