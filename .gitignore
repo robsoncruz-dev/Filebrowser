@@ -1,0 +1,26 @@
+# Filebrowser — Development & Private files
+planejamento.md
+deploy.md
+config.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+*.db
+*.sqlite3

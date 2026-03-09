@@ -1,0 +1,31 @@
+# Filebrowser — Configuração do Usuário
+# Copie este arquivo para ~/.config/filebrowser/config.toml
+# e ajuste conforme seu sistema.
+
+[geral]
+leitor = "zathura"                    # Leitor de PDF (zathura, evince, okular, xdg-open)
+fechar_apos_abrir = true              # Fecha a janela ao abrir o PDF
+
+[busca]
+diretorios = [
+    "~/Documentos",
+    "~/Downloads"
+]
+profundidade_local = 5                 # Níveis de subpastas locais
+profundidade_nuvem = 15                # Níveis de subpastas na nuvem
+ignorar = [".cache", "node_modules", ".git", "__pycache__", ".venv"]
+prefixo_nuvem = "~/Nuvem"
+
+[interface]
+largura = 620                          # Largura da janela em pixels
+max_resultados = 12                    # Máximo de itens exibidos
+
+# ─── Nuvem (opcional) ──────────────────────────────────
+# Descomente e ajuste se usar rclone para nuvem
+
+# [nuvem]
+# auto_montar = true
+#
+# [nuvem.remotes]
+# onedrive = "~/Nuvem/OneDrive"
+# gdrive = "~/Nuvem/GoogleDrive"

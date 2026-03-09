@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filebrowser-pdf"
+version = "0.2.0"
+description = "Launcher estilo Spotlight para busca e abertura de PDFs no Linux"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Robson Cruz", email = "dev@example.com"},
+]
+requires-python = ">=3.10"
+keywords = ["pdf", "viewer", "launcher", "spotlight", "linux", "gtk4"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: GTK",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Desktop Environment",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/robsoncruz-dev/filebrowser"
+Repository = "https://github.com/robsoncruz-dev/filebrowser"
+Issues = "https://github.com/robsoncruz-dev/filebrowser/issues"
+
+[project.scripts]
+filebrowser = "src.main:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

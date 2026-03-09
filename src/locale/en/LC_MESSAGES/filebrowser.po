@@ -1,0 +1,59 @@
+# English translations for Filebrowser
+# Copyright (C) 2026 Robson Cruz
+# This file is distributed under the MIT license.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: filebrowser 0.2.0\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Buscar PDF..."
+msgstr "Search PDF..."
+
+msgid "Nenhum PDF indexado — clique 🔄 para indexar"
+msgstr "No PDFs indexed — click 🔄 to index"
+
+msgid "Indexando pastas locais..."
+msgstr "Indexing local folders..."
+
+msgid "Montando nuvem..."
+msgstr "Mounting cloud..."
+
+msgid "Indexando nuvem... (pode demorar)"
+msgstr "Indexing cloud... (may take a while)"
+
+msgid "Nuvem lenta... (aguardando)"
+msgstr "Cloud slow... (waiting)"
+
+msgid "PDFs locais"
+msgstr "local PDFs"
+
+msgid "PDFs indexados"
+msgstr "PDFs indexed"
+
+msgid "Última"
+msgstr "Last"
+
+msgid "locais"
+msgstr "local"
+
+msgid "nuvem"
+msgstr "cloud"
+
+msgid "Enviar Feedback"
+msgstr "Send Feedback"
+
+msgid "Problema"
+msgstr "Bug"
+
+msgid "Sugestão"
+msgstr "Suggestion"
+
+msgid "Elogio"
+msgstr "Praise"
+
+msgid "Apoie o Projeto"
+msgstr "Support the Project"
