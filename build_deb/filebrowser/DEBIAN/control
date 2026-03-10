@@ -1,0 +1,11 @@
+Package: filebrowser
+Version: 0.2.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0
+Suggests: zathura, rclone
+Maintainer: Robson Cruz <your_email@example.com>
+Description: Launcher de PDFs estilo Spotlight para Linux
+ Encontra qualquer PDF no seu sistema em milissegundos. Pressione um
+ atalho de teclado, digite o nome, e pronto.

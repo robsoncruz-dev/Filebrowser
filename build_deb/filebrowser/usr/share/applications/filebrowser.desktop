@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Filebrowser
+Comment=Launcher de PDFs estilo Spotlight para Linux
+Exec=/usr/bin/filebrowser
+Icon=document-open
+Type=Application
+Categories=Utility;Office;
+Keywords=pdf;search;finder;documents;
+StartupNotify=false
+Terminal=false

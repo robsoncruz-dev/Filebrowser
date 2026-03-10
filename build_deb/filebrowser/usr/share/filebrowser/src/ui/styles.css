@@ -1,0 +1,210 @@
+/* Filebrowser — GTK4 Stylesheet */
+
+/* Janela principal */
+window.filebrowser-window {
+    background-color: rgba(22, 22, 30, 0.95);
+    border-radius: 14px;
+}
+
+/* Container principal */
+.main-container {
+    padding: 8px;
+}
+
+/* Campo de busca */
+.search-entry {
+    font-size: 18px;
+    font-family: "Inter", "Cantarell", sans-serif;
+    padding: 14px 18px;
+    background-color: rgba(40, 40, 56, 0.9);
+    color: #e8e8f0;
+    border: 1px solid rgba(120, 120, 180, 0.3);
+    border-radius: 10px;
+    caret-color: #8b8bdb;
+    min-height: 24px;
+}
+
+.search-entry:focus {
+    border-color: rgba(140, 130, 255, 0.6);
+    box-shadow: 0 0 0 2px rgba(140, 130, 255, 0.15);
+}
+
+.search-entry text {
+    color: #e8e8f0;
+}
+
+/* Placeholder do campo de busca */
+.search-entry text placeholder {
+    color: rgba(180, 180, 210, 0.5);
+}
+
+/* Container de resultados */
+.results-scroll {
+    background-color: transparent;
+    margin-top: 4px;
+}
+
+/* Lista de resultados */
+.results-list {
+    background-color: transparent;
+}
+
+.results-list row {
+    padding: 0;
+    margin: 1px 0;
+    border-radius: 8px;
+    background-color: transparent;
+    transition: background-color 150ms ease;
+}
+
+.results-list row:selected {
+    background-color: rgba(140, 130, 255, 0.2);
+}
+
+.results-list row:hover {
+    background-color: rgba(100, 100, 150, 0.15);
+}
+
+/* Item de resultado (cada PDF) */
+.result-item {
+    padding: 10px 14px;
+}
+
+.result-filename {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: "Inter", "Cantarell", sans-serif;
+    color: #d8d8f0;
+}
+
+.result-path {
+    font-size: 11px;
+    font-family: "Inter", "Cantarell", sans-serif;
+    color: rgba(160, 160, 200, 0.7);
+    margin-top: 2px;
+}
+
+/* Ícone PDF */
+.pdf-icon {
+    font-size: 22px;
+    margin-right: 10px;
+    color: #e06060;
+}
+
+/* Mensagem quando não há resultados */
+.no-results {
+    font-size: 13px;
+    font-family: "Inter", "Cantarell", sans-serif;
+    color: rgba(160, 160, 200, 0.5);
+    padding: 20px;
+}
+
+/* Barra de progresso (indexação) */
+.index-progress {
+    min-height: 3px;
+    margin: 4px 14px 0 14px;
+    border-radius: 2px;
+    background-color: rgba(60, 60, 80, 0.3);
+}
+
+.index-progress trough {
+    min-height: 3px;
+    background-color: rgba(60, 60, 80, 0.3);
+    border-radius: 2px;
+}
+
+.index-progress progress {
+    min-height: 3px;
+    background-color: rgba(140, 130, 255, 0.7);
+    border-radius: 2px;
+}
+
+/* Contador de indexação */
+.counter-text {
+    font-size: 10px;
+    font-family: "Inter", "Cantarell", sans-serif;
+    color: rgba(160, 160, 210, 0.55);
+    padding: 2px 14px 0 14px;
+}
+
+/* Prompt de fechamento durante indexação */
+.close-prompt {
+    padding: 8px 14px;
+    margin: 4px 10px;
+    background-color: rgba(50, 45, 30, 0.6);
+    border: 1px solid rgba(200, 170, 80, 0.3);
+    border-radius: 8px;
+}
+
+.prompt-text {
+    font-size: 11px;
+    font-family: "Inter", "Cantarell", sans-serif;
+    color: rgba(220, 200, 120, 0.85);
+}
+
+.prompt-btn-bg {
+    font-size: 10px;
+    padding: 3px 10px;
+    min-height: 0;
+    background-color: rgba(80, 140, 80, 0.4);
+    color: rgba(180, 230, 180, 0.9);
+    border: 1px solid rgba(80, 160, 80, 0.3);
+    border-radius: 6px;
+    transition: all 150ms ease;
+}
+
+.prompt-btn-bg:hover {
+    background-color: rgba(80, 160, 80, 0.6);
+    color: rgba(220, 255, 220, 1.0);
+}
+
+.prompt-btn-exit {
+    font-size: 10px;
+    padding: 3px 10px;
+    min-height: 0;
+    background-color: rgba(140, 60, 60, 0.3);
+    color: rgba(220, 160, 160, 0.7);
+    border: 1px solid rgba(160, 80, 80, 0.2);
+    border-radius: 6px;
+    transition: all 150ms ease;
+}
+
+.prompt-btn-exit:hover {
+    background-color: rgba(160, 60, 60, 0.5);
+    color: rgba(255, 200, 200, 1.0);
+}
+
+/* Barra de status inferior */
+.status-bar {
+    padding: 6px 14px;
+    margin-top: 4px;
+}
+
+.status-text {
+    font-size: 10px;
+    font-family: "Inter", "Cantarell", sans-serif;
+    color: rgba(140, 140, 180, 0.5);
+}
+
+/* Botão de re-indexação */
+.reindex-btn {
+    font-size: 12px;
+    padding: 2px 8px;
+    min-height: 0;
+    min-width: 0;
+    background-color: rgba(60, 60, 80, 0.5);
+    color: rgba(180, 180, 220, 0.6);
+    border: 1px solid rgba(100, 100, 150, 0.2);
+    border-radius: 6px;
+    transition: all 150ms ease;
+}
+
+.reindex-btn:hover {
+    background-color: rgba(140, 130, 255, 0.2);
+    color: rgba(220, 220, 255, 0.9);
+    border-color: rgba(140, 130, 255, 0.4);
+}
+
+.reindex-btn:disabled {
+    opacity: 0.3;
+}
