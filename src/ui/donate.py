@@ -5,6 +5,8 @@ Permite ao usuário contribuir com o projeto via PayPal, cripto ou PIX.
 """
 
 import subprocess
+import sys
+import os
 
 import gi
 gi.require_version("Gtk", "4.0")
@@ -134,10 +136,13 @@ class DonateWindow(Gtk.Window):
 
     def _on_paypal(self, button):
         try:
-            subprocess.Popen(
-                ["xdg-open", PAYPAL_URL],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+            if sys.platform == "win32":
+                os.startfile(PAYPAL_URL)
+            else:
+                subprocess.Popen(
+                    ["xdg-open", PAYPAL_URL],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
         except (FileNotFoundError, OSError):
             self.status_label.set_text(t("don_browser_error"))
 

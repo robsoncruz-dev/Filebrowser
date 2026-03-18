@@ -7,6 +7,8 @@ ao desenvolvedor via email (mailto:).
 
 import subprocess
 import urllib.parse
+import sys
+import os
 
 import gi
 gi.require_version("Gtk", "4.0")
@@ -130,10 +132,13 @@ class FeedbackWindow(Gtk.Window):
         )
 
         try:
-            subprocess.Popen(
-                ["xdg-open", mailto],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+            if sys.platform == "win32":
+                os.startfile(mailto)
+            else:
+                subprocess.Popen(
+                    ["xdg-open", mailto],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
             self.status_label.set_text(t("fb_success"))
         except (FileNotFoundError, OSError):
             self.status_label.set_text(t("fb_error"))

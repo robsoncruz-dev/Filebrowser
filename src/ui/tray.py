@@ -19,6 +19,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from src.i18n import t, load_saved_language
+from src.config.settings import CACHE_DIR
 
 # Carregar idioma salvo
 load_saved_language()
@@ -29,8 +30,9 @@ gi.require_version("AppIndicator3", "0.1")
 from gi.repository import Gtk, GLib, AppIndicator3
 
 
-STATE_FILE = os.path.expanduser("~/.cache/filebrowser/tray_state.json")
-PID_FILE = os.path.expanduser("~/.cache/filebrowser/app.pid")
+STATE_FILE = CACHE_DIR / "tray_state.json"
+PID_FILE = CACHE_DIR / "app.pid"
+TRAY_CMD_FILE = CACHE_DIR / "tray_cmd.json"
 
 
 def read_state() -> dict:
@@ -135,23 +137,24 @@ class TrayIcon:
         Gtk.main_quit()
 
     def _send_command(self, cmd: str):
-        cmd_file = os.path.expanduser("~/.cache/filebrowser/tray_cmd.json")
         try:
-            with open(cmd_file, "w") as f:
+            TRAY_CMD_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(TRAY_CMD_FILE, "w") as f:
                 json.dump({"command": cmd, "time": time.time()}, f)
         except OSError:
             pass
 
-        try:
-            with open(PID_FILE, "r") as f:
-                pid = int(f.read().strip())
-            os.kill(pid, signal.SIGUSR1)
-        except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
-            pass
+        if sys.platform != "win32":
+            try:
+                with open(PID_FILE, "r") as f:
+                    pid = int(f.read().strip())
+                os.kill(pid, signal.SIGUSR1)
+            except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
+                pass
 
 
 def main():
-    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     tray = TrayIcon()
     Gtk.main()
 

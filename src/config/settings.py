@@ -5,6 +5,8 @@ Carrega e gerencia as configurações da aplicação a partir do config.toml.
 """
 
 import tomllib
+import os
+import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -14,25 +16,38 @@ __version__ = "0.2.0"
 # Caminho raiz do projeto (dois níveis acima de src/config/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Config: ~/.config/filebrowser/ (instalado) ou diretório do projeto (dev)
-USER_CONFIG_DIR = Path.home() / ".config" / "filebrowser"
+# Define directories based on the OS
+if sys.platform == "win32":
+    app_data = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming"))
+    local_app_data = Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    USER_CONFIG_DIR = app_data / "Filebrowser"
+    CACHE_DIR = local_app_data / "Filebrowser" / "Cache"
+else:
+    USER_CONFIG_DIR = Path.home() / ".config" / "filebrowser"
+    CACHE_DIR = Path.home() / ".cache" / "filebrowser"
+
 USER_CONFIG_FILE = USER_CONFIG_DIR / "config.toml"
 PROJECT_CONFIG_FILE = PROJECT_ROOT / "config.toml"
 
 # Usar config do usuário se existir, senão o do projeto
 CONFIG_FILE = USER_CONFIG_FILE if USER_CONFIG_FILE.exists() else PROJECT_CONFIG_FILE
 
-CACHE_DIR = Path.home() / ".cache" / "filebrowser"
 DB_PATH = CACHE_DIR / "index.db"
 
 
 @dataclass
 class SearchConfig:
     """Configurações de busca."""
-    diretorios: list[str] = field(default_factory=lambda: ["~/Documentos", "~/Downloads"])
+    if sys.platform == "win32":
+        # Pastas comuns no Windows
+        default_dirs = ["~/Documents", "~/Downloads"]
+    else:
+        default_dirs = ["~/Documentos", "~/Downloads"]
+
+    diretorios: list[str] = field(default_factory=lambda: SearchConfig.default_dirs)
     profundidade_local: int = 5
     profundidade_nuvem: int = 15
-    ignorar: list[str] = field(default_factory=lambda: [".cache", "node_modules", ".git"])
+    ignorar: list[str] = field(default_factory=lambda: [".cache", "node_modules", ".git", "AppData", "Local Settings"])
     prefixo_nuvem: str = "~/Nuvem"
 
     @property
@@ -113,11 +128,19 @@ def load_config(config_path: Path | None = None) -> AppConfig:
 
     # Suporte a profundidade separada (fallback para profundidade_maxima se existir)
     prof_fallback = busca_data.get("profundidade_maxima", 5)
+    
+    if sys.platform == "win32":
+        default_busca_dirs = ["~/Documents", "~/Downloads"]
+        default_ignore = [".cache", "node_modules", ".git", "AppData", "Local Settings"]
+    else:
+        default_busca_dirs = ["~/Documentos", "~/Downloads"]
+        default_ignore = [".cache", "node_modules", ".git"]
+
     busca = SearchConfig(
-        diretorios=busca_data.get("diretorios", ["~/Documentos", "~/Downloads"]),
+        diretorios=busca_data.get("diretorios", default_busca_dirs),
         profundidade_local=busca_data.get("profundidade_local", prof_fallback),
         profundidade_nuvem=busca_data.get("profundidade_nuvem", 15),
-        ignorar=busca_data.get("ignorar", [".cache", "node_modules", ".git"]),
+        ignorar=busca_data.get("ignorar", default_ignore),
         prefixo_nuvem=busca_data.get("prefixo_nuvem", "~/Nuvem"),
     )
 

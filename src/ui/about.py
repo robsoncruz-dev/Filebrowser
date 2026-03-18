@@ -6,6 +6,8 @@ termos de uso e verificação de atualização.
 """
 
 import subprocess
+import sys
+import os
 import threading
 
 import gi
@@ -178,10 +180,13 @@ class AboutWindow(Gtk.Window):
 
     def _on_help(self, button):
         try:
-            subprocess.Popen(
-                ["xdg-open", f"{APP_WEBSITE}#readme"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+            if sys.platform == "win32":
+                os.startfile(f"{APP_WEBSITE}#readme")
+            else:
+                subprocess.Popen(
+                    ["xdg-open", f"{APP_WEBSITE}#readme"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
         except (FileNotFoundError, OSError):
             pass
 

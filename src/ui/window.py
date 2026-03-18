@@ -31,10 +31,12 @@ from src.i18n import t, load_saved_language
 load_saved_language()
 
 
+from src.config.settings import CACHE_DIR
+
 CSS_FILE = Path(__file__).resolve().parent / "styles.css"
-TRAY_STATE_FILE = Path.home() / ".cache" / "filebrowser" / "tray_state.json"
-PID_FILE = Path.home() / ".cache" / "filebrowser" / "app.pid"
-TRAY_CMD_FILE = Path.home() / ".cache" / "filebrowser" / "tray_cmd.json"
+TRAY_STATE_FILE = CACHE_DIR / "tray_state.json"
+PID_FILE = CACHE_DIR / "app.pid"
+TRAY_CMD_FILE = CACHE_DIR / "tray_cmd.json"
 TRAY_SCRIPT = Path(__file__).resolve().parent / "tray.py"
 
 
@@ -109,6 +111,9 @@ class FilebrowserWindow(Gtk.ApplicationWindow):
 
     def _force_floating(self) -> bool:
         """Força floating e centraliza a janela no WM ativo."""
+        if sys.platform == "win32":
+            return False
+
         wm = self._detect_wm()
         try:
             if wm == "i3":
@@ -406,6 +411,9 @@ class FilebrowserWindow(Gtk.ApplicationWindow):
 
     def _send_notification(self, total: int):
         """Envia notificação desktop se a janela está oculta (2º plano)."""
+        if sys.platform == "win32":
+            return  # No notify-send on Windows
+            
         try:
             if not self.get_visible():
                 subprocess.Popen(
@@ -616,18 +624,24 @@ class FilebrowserWindow(Gtk.ApplicationWindow):
         leitor = self.config.geral.leitor
 
         try:
-            subprocess.Popen(
-                [leitor, caminho],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            if sys.platform == "win32" and leitor.lower() not in ["zathura", "evince", "okular"]:
+                os.startfile(caminho)
+            else:
+                subprocess.Popen(
+                    [leitor, caminho],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
         except FileNotFoundError:
-            # Leitor não encontrado — tentar xdg-open como fallback
-            subprocess.Popen(
-                ["xdg-open", caminho],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            # Leitor não encontrado — tentar fallback do SO
+            if sys.platform == "win32":
+                os.startfile(caminho)
+            else:
+                subprocess.Popen(
+                    ["xdg-open", caminho],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
 
         if self.config.geral.fechar_apos_abrir:
             self._hide_window()
@@ -726,8 +740,9 @@ class FilebrowserApp(Gtk.Application):
         # Monitorar comandos do tray
         self._cmd_poll_id = GLib.timeout_add(1000, self._poll_tray_commands)
 
-        # Registrar handler SIGUSR1 para com tray
-        signal.signal(signal.SIGUSR1, self._on_sigusr1)
+        # Registrar handler SIGUSR1 para com tray (Linux unicamente)
+        if sys.platform != "win32":
+            signal.signal(signal.SIGUSR1, self._on_sigusr1)
 
     def do_shutdown(self):
         """Limpa recursos ao encerrar."""
