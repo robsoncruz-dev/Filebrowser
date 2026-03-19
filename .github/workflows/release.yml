@@ -175,8 +175,8 @@ jobs:
           pyinstaller --name "filebrowser" \
             --windowed \
             --collect-all gi \
-            --add-data "/ucrt64/lib/girepository-1.0;lib/girepository-1.0" \
-            --add-data "/ucrt64/share/glib-2.0/schemas;share/glib-2.0/schemas" \
+            --add-data "$(cygpath -w /ucrt64/lib/girepository-1.0);lib/girepository-1.0" \
+            --add-data "$(cygpath -w /ucrt64/share/glib-2.0/schemas);share/glib-2.0/schemas" \
             --add-data "src/ui/styles.css;src/ui" \
             --add-data "src/locale;src/locale" \
             --hidden-import "src.i18n" \
