@@ -36,6 +36,9 @@ Se você quer a experiência mais simples possível, baixe os pacotes prontos na
 #### 🟢 Ubuntu, Linux Mint, Pop!_OS, Debian
 Baixe o arquivo **`.deb`** e dê um clique duplo. A loja de aplicativos do seu sistema vai abrir e você só precisa clicar em **"Instalar"**.
 
+#### 🪟 Windows
+Baixe o arquivo **`-Installer.exe`** na página de Releases. Basta executar o instalador e seguir as instruções. Ele criará atalhos no Menu Iniciar e na Área de Trabalho para você.
+
 #### 🔵 Qualquer outro Linux (Fedora, Arch Linux, etc)
 Baixe o arquivo **`.AppImage`**. Clique com o botão direito nele, vá em **Propriedades → Permissões** e marque "Permitir execução como programa". Depois, basta dar dois cliques para abrir!
 
@@ -95,6 +98,36 @@ bindsym $mod+Shift+f exec filebrowser
 # Configurações → Teclado → Atalhos Personalizados
 # Comando: filebrowser
 ```
+
+## 🪟 Windows (Compilação)
+
+O Filebrowser é compatível com Windows via **MSYS2**. Para compilar seu próprio executável `.exe`:
+
+### Pré-requisitos
+
+1. Instale o [MSYS2](https://www.msys2.org/).
+2. Abra o terminal **MSYS2 UCRT64** e instale as dependências:
+   ```bash
+   pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gtk4 \
+             mingw-w64-ucrt-x86_64-python3 mingw-w64-ucrt-x86_64-python-gobject \
+             mingw-w64-ucrt-x86_64-python-pip
+   ```
+3. Instale o PyInstaller:
+   ```bash
+   pip install pyinstaller
+   ```
+
+### Compilando
+
+No terminal MSYS2 (ou PowerShell com o PATH do MSYS2 configurado), execute:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
+```
+
+O executável será gerado na pasta `dist/filebrowser/` e um arquivo `.zip` será criado na raiz do projeto.
+
+---
 
 ## 🤝 Contribuir
 

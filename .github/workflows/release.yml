@@ -172,6 +172,11 @@ jobs:
             --hidden-import "src.i18n" \
             src/main.py
 
+      - name: Build Windows Installer (Inno Setup)
+        uses: robin24/inno-setup-action@v1
+        with:
+          filepath: scripts/installer.iss
+
       - name: Create Windows Archive
         run: |
           Compress-Archive -Path dist\filebrowser\* -DestinationPath Filebrowser-${{ github.event.release.tag_name || '0.2.0' }}-Windows.zip
@@ -180,4 +185,6 @@ jobs:
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: Filebrowser-*.zip
+          files: |
+            Filebrowser-*.zip
+            scripts/Output/Filebrowser-*-Installer.exe
