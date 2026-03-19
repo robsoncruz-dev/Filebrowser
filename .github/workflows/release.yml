@@ -162,6 +162,7 @@ jobs:
             mingw-w64-ucrt-x86_64-python3
             mingw-w64-ucrt-x86_64-python-gobject
             mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-cairo
 
       - name: Install Python Dependencies
         shell: msys2 {0}
@@ -174,8 +175,7 @@ jobs:
           pyinstaller --name "filebrowser" \
             --windowed \
             --collect-all gi \
-            --collect-all pango \
-            --collect-all cairocffi \
+            --collect-all cairo \
             --add-data "/ucrt64/lib/girepository-1.0;lib/girepository-1.0" \
             --add-data "/ucrt64/share/glib-2.0/schemas;share/glib-2.0/schemas" \
             --add-data "src/ui/styles.css;src/ui" \
