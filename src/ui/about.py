@@ -10,13 +10,15 @@ import sys
 import os
 import threading
 
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QTabWidget, QScrollArea, QWidget
+)
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QDesktopServices
 
 from src.config.settings import __version__
 from src.i18n import t
-
 
 # ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -33,8 +35,8 @@ HISTORY_TEXT_PT = (
     "Eu queria algo como o Spotlight do macOS — pressionar um atalho, "
     "digitar o nome, e pronto.\n\n"
     "O projeto começou como um script simples, evoluiu para uma aplicação "
-    "GTK4 com indexação inteligente, suporte a nuvem via rclone, e busca "
-    "instantânea.\n\n"
+    "altamente responsiva, com suporte a nuvem via rclone e busca "
+    "instantânea nativa.\n\n"
     "Se o Filebrowser facilita sua vida, fico feliz. Se quiser contribuir, "
     "acesse nosso repositório no GitHub. ❤"
 )
@@ -45,7 +47,7 @@ HISTORY_TEXT_EN = (
     "Browsing through folders in the file manager was too slow. "
     "I wanted something like macOS Spotlight — press a shortcut, "
     "type the name, and done.\n\n"
-    "The project started as a simple script and evolved into a GTK4 "
+    "The project started as a simple script and evolved into a robust "
     "application with smart indexing, cloud support via rclone, and "
     "instant search.\n\n"
     "If Filebrowser makes your life easier, I'm happy. Want to contribute? "
@@ -88,111 +90,90 @@ def _get_terms():
     return TERMS_TEXT_EN if get_language() == "en" else TERMS_TEXT_PT
 
 
-class AboutWindow(Gtk.Window):
-    def __init__(self, parent: Gtk.Window):
-        super().__init__(
-            title=t("about_title", app=APP_NAME),
-            transient_for=parent,
-            modal=True,
-            default_width=480,
-            default_height=420,
-        )
-        self.set_resizable(False)
+class AboutWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(t("about_title", app=APP_NAME))
+        self.setFixedSize(480, 420)
+        self.setModal(True)
         self._build_ui()
 
     def _build_ui(self):
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        main_box.set_margin_top(20)
-        main_box.set_margin_bottom(20)
-        main_box.set_margin_start(24)
-        main_box.set_margin_end(24)
-        self.set_child(main_box)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(12)
 
-        title = Gtk.Label()
-        title.set_markup(f"<span size='xx-large' weight='bold'>📄 {APP_NAME}</span>")
-        main_box.append(title)
+        title = QLabel(f"📄 {APP_NAME}")
+        title.setStyleSheet("font-size: 24px; font-weight: bold;")
+        main_layout.addWidget(title)
 
-        ver = Gtk.Label(label=t("about_version", v=__version__))
-        ver.add_css_class("dim-label")
-        main_box.append(ver)
+        ver = QLabel(t("about_version", v=__version__))
+        ver.setProperty("class", "dim-label")
+        main_layout.addWidget(ver)
 
-        desc = Gtk.Label(label=t("about_desc"))
-        desc.set_wrap(True)
-        main_box.append(desc)
+        desc = QLabel(t("about_desc"))
+        desc.setWordWrap(True)
+        main_layout.addWidget(desc)
 
-        notebook = Gtk.Notebook()
-        main_box.append(notebook)
+        tabs = QTabWidget()
+        main_layout.addWidget(tabs)
 
-        # Tab: History
-        history_scroll = Gtk.ScrolledWindow()
-        history_scroll.set_min_content_height(200)
-        history_label = Gtk.Label(label=_get_history())
-        history_label.set_wrap(True)
-        history_label.set_margin_top(12)
-        history_label.set_margin_bottom(12)
-        history_label.set_margin_start(12)
-        history_label.set_margin_end(12)
-        history_label.set_valign(Gtk.Align.START)
-        history_scroll.set_child(history_label)
-        notebook.append_page(history_scroll, Gtk.Label(label=t("about_tab_history")))
+        history_widget = QWidget()
+        history_layout = QVBoxLayout(history_widget)
+        history_label = QLabel(_get_history())
+        history_label.setWordWrap(True)
+        history_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        history_scroll = QScrollArea()
+        history_scroll.setWidgetResizable(True)
+        history_scroll.setWidget(history_label)
+        history_layout.addWidget(history_scroll)
+        history_layout.setContentsMargins(0, 0, 0, 0)
+        tabs.addTab(history_widget, t("about_tab_history"))
 
-        # Tab: Terms
-        terms_scroll = Gtk.ScrolledWindow()
-        terms_scroll.set_min_content_height(200)
-        terms_label = Gtk.Label(label=_get_terms())
-        terms_label.set_wrap(True)
-        terms_label.set_margin_top(12)
-        terms_label.set_margin_bottom(12)
-        terms_label.set_margin_start(12)
-        terms_label.set_margin_end(12)
-        terms_label.set_valign(Gtk.Align.START)
-        terms_label.set_selectable(True)
-        terms_scroll.set_child(terms_label)
-        notebook.append_page(terms_scroll, Gtk.Label(label=t("about_tab_terms")))
+        terms_widget = QWidget()
+        terms_layout = QVBoxLayout(terms_widget)
+        terms_label = QLabel(_get_terms())
+        terms_label.setWordWrap(True)
+        terms_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        terms_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        terms_scroll = QScrollArea()
+        terms_scroll.setWidgetResizable(True)
+        terms_scroll.setWidget(terms_label)
+        terms_layout.addWidget(terms_scroll)
+        terms_layout.setContentsMargins(0, 0, 0, 0)
+        tabs.addTab(terms_widget, t("about_tab_terms"))
 
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_box.set_halign(Gtk.Align.CENTER)
-        main_box.append(btn_box)
+        btn_layout = QHBoxLayout()
+        btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addLayout(btn_layout)
 
-        help_btn = Gtk.Button(label=t("about_help"))
-        help_btn.connect("clicked", self._on_help)
-        btn_box.append(help_btn)
+        help_btn = QPushButton(t("about_help"))
+        help_btn.clicked.connect(self._on_help)
+        btn_layout.addWidget(help_btn)
 
-        update_btn = Gtk.Button(label=t("about_check_update"))
-        update_btn.connect("clicked", self._on_check_update)
-        self._update_btn = update_btn
-        btn_box.append(update_btn)
+        self.update_btn = QPushButton(t("about_check_update"))
+        self.update_btn.clicked.connect(self._on_check_update)
+        btn_layout.addWidget(self.update_btn)
 
-        close_btn = Gtk.Button(label=t("about_close"))
-        close_btn.connect("clicked", lambda b: self.close())
-        btn_box.append(close_btn)
+        close_btn = QPushButton(t("about_close"))
+        close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(close_btn)
 
-        self.update_label = Gtk.Label(label="")
-        self.update_label.set_wrap(True)
-        main_box.append(self.update_label)
+        self.update_label = QLabel("")
+        self.update_label.setWordWrap(True)
+        main_layout.addWidget(self.update_label)
 
-        author = Gtk.Label()
-        author.set_markup(
-            f"<span size='small'>{t('about_made_by', author=APP_AUTHOR)}</span>"
-        )
-        author.add_css_class("dim-label")
-        main_box.append(author)
+        author = QLabel(t("about_made_by", author=APP_AUTHOR))
+        author.setStyleSheet("font-size: 11px;")
+        author.setProperty("class", "dim-label")
+        main_layout.addWidget(author)
 
-    def _on_help(self, button):
-        try:
-            if sys.platform == "win32":
-                os.startfile(f"{APP_WEBSITE}#readme")
-            else:
-                subprocess.Popen(
-                    ["xdg-open", f"{APP_WEBSITE}#readme"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-        except (FileNotFoundError, OSError):
-            pass
+    def _on_help(self):
+        QDesktopServices.openUrl(QUrl(f"{APP_WEBSITE}#readme"))
 
-    def _on_check_update(self, button):
-        button.set_sensitive(False)
-        self.update_label.set_text(t("about_checking"))
+    def _on_check_update(self):
+        self.update_btn.setEnabled(False)
+        self.update_label.setText(t("about_checking"))
 
         def _check():
             try:
@@ -203,19 +184,29 @@ class AboutWindow(Gtk.Window):
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read())
                     latest = data.get("tag_name", "").lstrip("v")
+                
+                from PyQt6.QtCore import QMetaObject, Q_ARG
                 if latest and latest != __version__:
-                    GLib.idle_add(
-                        self.update_label.set_text,
-                        t("about_new_version", v=latest, url=f"{APP_WEBSITE}/releases"),
+                    QMetaObject.invokeMethod(self.update_label, "setText", 
+                        Qt.ConnectionType.QueuedConnection, 
+                        Q_ARG(str, t("about_new_version", v=latest, url=f"{APP_WEBSITE}/releases"))
                     )
                 else:
-                    GLib.idle_add(
-                        self.update_label.set_text,
-                        t("about_up_to_date", v=__version__),
+                    QMetaObject.invokeMethod(self.update_label, "setText", 
+                        Qt.ConnectionType.QueuedConnection, 
+                        Q_ARG(str, t("about_up_to_date", v=__version__))
                     )
             except Exception:
-                GLib.idle_add(self.update_label.set_text, t("about_check_error"))
+                from PyQt6.QtCore import QMetaObject, Q_ARG
+                QMetaObject.invokeMethod(self.update_label, "setText", 
+                    Qt.ConnectionType.QueuedConnection, 
+                    Q_ARG(str, t("about_check_error"))
+                )
             finally:
-                GLib.idle_add(button.set_sensitive, True)
+                from PyQt6.QtCore import QMetaObject, Q_ARG
+                QMetaObject.invokeMethod(self.update_btn, "setEnabled", 
+                    Qt.ConnectionType.QueuedConnection, 
+                    Q_ARG(bool, True)
+                )
 
         threading.Thread(target=_check, daemon=True).start()

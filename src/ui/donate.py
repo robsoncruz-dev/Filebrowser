@@ -4,17 +4,14 @@ Filebrowser — Janela de Doação
 Permite ao usuário contribuir com o projeto via PayPal, cripto ou PIX.
 """
 
-import subprocess
-import sys
-import os
-
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gdk
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+    QPushButton, QFrame, QApplication
+)
+from PyQt6.QtCore import Qt
 
 from src.ui.about import APP_NAME, APP_AUTHOR
 from src.i18n import t
-
 
 # ─── MOCKUP — Substituir antes de publicar ───────────────────────────────────
 
@@ -23,131 +20,108 @@ BTC_ADDRESS = "bc1qxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # MOCKUP
 PIX_KEY = "seu@email.com"                             # MOCKUP
 
 
-class DonateWindow(Gtk.Window):
-    def __init__(self, parent: Gtk.Window):
-        super().__init__(
-            title=t("don_title", app=APP_NAME),
-            transient_for=parent,
-            modal=True,
-            default_width=420,
-            default_height=380,
-        )
-        self.set_resizable(False)
+class DonateWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(t("don_title", app=APP_NAME))
+        self.setFixedSize(420, 380)
+        self.setModal(True)
         self._build_ui()
 
     def _build_ui(self):
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        main_box.set_margin_top(24)
-        main_box.set_margin_bottom(24)
-        main_box.set_margin_start(24)
-        main_box.set_margin_end(24)
-        self.set_child(main_box)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(16)
 
-        title = Gtk.Label()
-        title.set_markup(f"<span size='x-large' weight='bold'>{t('don_header')}</span>")
-        main_box.append(title)
+        title = QLabel(f"<b>{t('don_header')}</b>")
+        title.setStyleSheet("font-size: 20px;")
+        main_layout.addWidget(title)
 
-        desc = Gtk.Label(label=t("don_desc", app=APP_NAME))
-        desc.set_wrap(True)
-        desc.set_justify(Gtk.Justification.CENTER)
-        main_box.append(desc)
+        desc = QLabel(t("don_desc", app=APP_NAME))
+        desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(desc)
 
         # PayPal
-        main_box.append(self._create_donate_row(
-            t("don_paypal"), t("don_paypal_desc"), t("don_paypal_btn"), self._on_paypal,
+        main_layout.addWidget(self._create_donate_row(
+            t("don_paypal"), t("don_paypal_desc"), t("don_paypal_btn"), self._on_paypal
         ))
 
         # Bitcoin
-        main_box.append(self._create_copy_row(t("don_bitcoin"), BTC_ADDRESS))
+        main_layout.addWidget(self._create_copy_row(t("don_bitcoin"), BTC_ADDRESS))
 
         # PIX
-        main_box.append(self._create_copy_row(t("don_pix"), PIX_KEY))
+        main_layout.addWidget(self._create_copy_row(t("don_pix"), PIX_KEY))
 
-        self.status_label = Gtk.Label(label="")
-        main_box.append(self.status_label)
+        self.status_label = QLabel("")
+        main_layout.addWidget(self.status_label)
 
-        close_btn = Gtk.Button(label=t("don_close"))
-        close_btn.set_halign(Gtk.Align.CENTER)
-        close_btn.connect("clicked", lambda b: self.close())
-        main_box.append(close_btn)
+        close_btn = QPushButton(t("don_close"))
+        close_btn.clicked.connect(self.accept)
+        btn_layout = QHBoxLayout()
+        btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        btn_layout.addWidget(close_btn)
+        main_layout.addLayout(btn_layout)
 
-        thanks = Gtk.Label()
-        thanks.set_markup(f"<span size='small'>{t('don_thanks', app=APP_NAME)}</span>")
-        thanks.add_css_class("dim-label")
-        main_box.append(thanks)
+        thanks = QLabel(t("don_thanks", app=APP_NAME))
+        thanks.setStyleSheet("font-size: 11px;")
+        thanks.setProperty("class", "dim-label")
+        main_layout.addWidget(thanks)
 
     def _create_donate_row(self, label_text, desc_text, btn_text, callback):
-        frame = Gtk.Frame()
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Shape.StyledPanel)
+        box = QHBoxLayout(frame)
+        box.setContentsMargins(12, 8, 12, 8)
+        box.setSpacing(12)
 
-        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        info.set_hexpand(True)
-        name = Gtk.Label()
-        name.set_halign(Gtk.Align.START)
-        name.set_markup(f"<b>{label_text}</b>")
-        info.append(name)
-        d = Gtk.Label(label=desc_text)
-        d.set_halign(Gtk.Align.START)
-        d.add_css_class("dim-label")
-        info.append(d)
-        box.append(info)
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        name = QLabel(f"<b>{label_text}</b>")
+        info.addWidget(name)
+        d = QLabel(desc_text)
+        d.setProperty("class", "dim-label")
+        info.addWidget(d)
+        box.addLayout(info, stretch=1)
 
-        btn = Gtk.Button(label=btn_text)
-        btn.set_valign(Gtk.Align.CENTER)
-        btn.connect("clicked", callback)
-        box.append(btn)
+        btn = QPushButton(btn_text)
+        btn.clicked.connect(callback)
+        box.addWidget(btn)
 
-        frame.set_child(box)
         return frame
 
     def _create_copy_row(self, label_text, address):
-        frame = Gtk.Frame()
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Shape.StyledPanel)
+        box = QHBoxLayout(frame)
+        box.setContentsMargins(12, 8, 12, 8)
+        box.setSpacing(12)
 
-        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        info.set_hexpand(True)
-        name = Gtk.Label()
-        name.set_halign(Gtk.Align.START)
-        name.set_markup(f"<b>{label_text}</b>")
-        info.append(name)
-        addr = Gtk.Label(label=address)
-        addr.set_halign(Gtk.Align.START)
-        addr.set_selectable(True)
-        addr.set_ellipsize(2)
-        addr.add_css_class("dim-label")
-        info.append(addr)
-        box.append(info)
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        name = QLabel(f"<b>{label_text}</b>")
+        info.addWidget(name)
+        addr = QLabel(address)
+        addr.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        addr.setProperty("class", "dim-label")
+        info.addWidget(addr)
+        box.addLayout(info, stretch=1)
 
-        btn = Gtk.Button(label=t("don_copy"))
-        btn.set_valign(Gtk.Align.CENTER)
-        btn.connect("clicked", lambda b: self._copy_to_clipboard(address))
-        box.append(btn)
+        btn = QPushButton(t("don_copy"))
+        btn.clicked.connect(lambda: self._copy_to_clipboard(address))
+        box.addWidget(btn)
 
-        frame.set_child(box)
         return frame
 
-    def _on_paypal(self, button):
+    def _on_paypal(self):
         try:
-            if sys.platform == "win32":
-                os.startfile(PAYPAL_URL)
-            else:
-                subprocess.Popen(
-                    ["xdg-open", PAYPAL_URL],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-        except (FileNotFoundError, OSError):
-            self.status_label.set_text(t("don_browser_error"))
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(PAYPAL_URL))
+        except Exception:
+            self.status_label.setText(t("don_browser_error"))
 
     def _copy_to_clipboard(self, text):
-        display = Gdk.Display.get_default()
-        clipboard = display.get_clipboard()
-        clipboard.set(text)
-        self.status_label.set_text(t("don_copied"))
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        self.status_label.setText(t("don_copied"))

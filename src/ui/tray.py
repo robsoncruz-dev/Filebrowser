@@ -4,7 +4,7 @@ Filebrowser — System Tray (subprocess)
 
 Processo separado que exibe ícone na bandeja do sistema.
 Comunica com a aplicação principal via arquivo de estado.
-Usa GTK3 + AppIndicator3 (separado do GTK4 da app principal).
+Usa PyQt6 (QSystemTrayIcon).
 """
 
 import os
@@ -24,11 +24,9 @@ from src.config.settings import CACHE_DIR
 # Carregar idioma salvo
 load_saved_language()
 
-import gi
-gi.require_version("Gtk", "3.0")
-gi.require_version("AppIndicator3", "0.1")
-from gi.repository import Gtk, GLib, AppIndicator3
-
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtCore import QTimer
 
 STATE_FILE = CACHE_DIR / "tray_state.json"
 PID_FILE = CACHE_DIR / "app.pid"
@@ -44,76 +42,71 @@ def read_state() -> dict:
         return {"indexing": False, "local": 0, "cloud": 0, "status": ""}
 
 
-class TrayIcon:
-    """Ícone na system tray com AppIndicator3."""
+class TrayIcon(QSystemTrayIcon):
+    """Ícone na system tray usando PyQt6."""
 
-    ICON_IDLE = "folder"
-    ICON_INDEXING = "folder-download"
-
-    def __init__(self):
-        self._indicator = AppIndicator3.Indicator.new(
-            "filebrowser-pdf",
-            self.ICON_IDLE,
-            AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
-        )
-        self._indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-        self._indicator.set_title("Filebrowser")
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setIcon(QIcon.fromTheme("folder"))
+        self.setToolTip("Filebrowser")
         self._build_menu()
-        self._poll_timer = GLib.timeout_add(2000, self._poll_state)
+        
+        # Iniciar polling
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._poll_state)
+        self._timer.start(2000)
 
     def _build_menu(self):
-        menu = Gtk.Menu()
+        menu = QMenu()
 
-        self._item_status = Gtk.MenuItem(label=t("tray_title"))
-        self._item_status.set_sensitive(False)
-        menu.append(self._item_status)
+        self._item_status = QAction(t("tray_title"), self)
+        self._item_status.setEnabled(False)
+        menu.addAction(self._item_status)
+        menu.addSeparator()
 
-        menu.append(Gtk.SeparatorMenuItem())
+        item_show = QAction(t("tray_show"), self)
+        item_show.triggered.connect(self._on_show)
+        menu.addAction(item_show)
 
-        item_show = Gtk.MenuItem(label=t("tray_show"))
-        item_show.connect("activate", self._on_show)
-        menu.append(item_show)
+        item_reindex = QAction(t("tray_reindex"), self)
+        item_reindex.triggered.connect(self._on_reindex)
+        menu.addAction(item_reindex)
 
-        item_reindex = Gtk.MenuItem(label=t("tray_reindex"))
-        item_reindex.connect("activate", self._on_reindex)
-        menu.append(item_reindex)
+        menu.addSeparator()
 
-        menu.append(Gtk.SeparatorMenuItem())
+        item_settings = QAction(t("tray_settings"), self)
+        item_settings.triggered.connect(lambda: self._send_command("settings"))
+        menu.addAction(item_settings)
 
-        item_settings = Gtk.MenuItem(label=t("tray_settings"))
-        item_settings.connect("activate", lambda i: self._send_command("settings"))
-        menu.append(item_settings)
+        item_about = QAction(t("tray_about"), self)
+        item_about.triggered.connect(lambda: self._send_command("about"))
+        menu.addAction(item_about)
 
-        item_about = Gtk.MenuItem(label=t("tray_about"))
-        item_about.connect("activate", lambda i: self._send_command("about"))
-        menu.append(item_about)
+        item_feedback = QAction(t("tray_feedback"), self)
+        item_feedback.triggered.connect(lambda: self._send_command("feedback"))
+        menu.addAction(item_feedback)
 
-        item_feedback = Gtk.MenuItem(label=t("tray_feedback"))
-        item_feedback.connect("activate", lambda i: self._send_command("feedback"))
-        menu.append(item_feedback)
+        item_donate = QAction(t("tray_donate"), self)
+        item_donate.triggered.connect(lambda: self._send_command("donate"))
+        menu.addAction(item_donate)
 
-        item_donate = Gtk.MenuItem(label=t("tray_donate"))
-        item_donate.connect("activate", lambda i: self._send_command("donate"))
-        menu.append(item_donate)
+        menu.addSeparator()
 
-        menu.append(Gtk.SeparatorMenuItem())
+        item_quit = QAction(t("tray_quit"), self)
+        item_quit.triggered.connect(self._on_quit)
+        menu.addAction(item_quit)
 
-        item_quit = Gtk.MenuItem(label=t("tray_quit"))
-        item_quit.connect("activate", self._on_quit)
-        menu.append(item_quit)
+        self.setContextMenu(menu)
 
-        menu.show_all()
-        self._indicator.set_menu(menu)
-
-    def _poll_state(self) -> bool:
+    def _poll_state(self):
         """Verifica o estado a cada 2s e atualiza o ícone."""
         state = read_state()
         indexing = state.get("indexing", False)
         local = state.get("local", 0)
         cloud = state.get("cloud", 0)
 
-        icon = self.ICON_INDEXING if indexing else self.ICON_IDLE
-        self._indicator.set_icon_full(icon, "Filebrowser")
+        icon_theme = "folder-download" if indexing else "folder"
+        self.setIcon(QIcon.fromTheme(icon_theme))
 
         if indexing:
             label = t("tray_indexing", local=local, cloud=cloud)
@@ -122,19 +115,18 @@ class TrayIcon:
         else:
             label = t("tray_title")
 
-        self._item_status.set_label(label)
-        self._indicator.set_title(label)
-        return True
+        self.setToolTip(label)
+        self._item_status.setText(label)
 
-    def _on_show(self, item):
+    def _on_show(self):
         self._send_command("show")
 
-    def _on_reindex(self, item):
+    def _on_reindex(self):
         self._send_command("reindex")
 
-    def _on_quit(self, item):
+    def _on_quit(self):
         self._send_command("quit")
-        Gtk.main_quit()
+        QApplication.quit()
 
     def _send_command(self, cmd: str):
         try:
@@ -155,8 +147,14 @@ class TrayIcon:
 
 def main():
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    app = QApplication(sys.argv)
+    
+    # Prevenir que fechar janela finaliza
+    app.setQuitOnLastWindowClosed(False)
+    
     tray = TrayIcon()
-    Gtk.main()
+    tray.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

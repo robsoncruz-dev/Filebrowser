@@ -35,13 +35,12 @@ check_cmd() {
 
 check_cmd python3 "Python 3" required
 
-# Verificar PyGObject + GTK4
-if python3 -c "import gi; gi.require_version('Gtk','4.0'); from gi.repository import Gtk" 2>/dev/null; then
-    echo "  ✅ PyGObject + GTK4"
+if python3 -c "import PyQt6" 2>/dev/null; then
+    echo "  ✅ PyQt6"
 else
-    echo "  ❌ PyGObject + GTK4 (OBRIGATÓRIO)"
-    echo "     Instale: sudo pacman -S python-gobject gtk4    (Arch)"
-    echo "              sudo apt install python3-gi gir1.2-gtk-4.0  (Ubuntu)"
+    echo "  ❌ PyQt6 (OBRIGATÓRIO)"
+    echo "     Instale: sudo pacman -S python-pyqt6           (Arch)"
+    echo "              sudo apt install python3-pyqt6          (Ubuntu/Debian)"
     ERRORS=$((ERRORS + 1))
 fi
 
