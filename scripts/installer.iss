@@ -3,7 +3,7 @@
 ; ─────────────────────────────────────────────────────────
 
 #define AppName "Filebrowser"
-#define AppVersion "0.2.7"
+#define AppVersion "0.3.2"
 #define AppPublisher "Robson Cruz"
 #define AppURL "https://github.com/robsoncruz-dev/filebrowser"
 #define AppExeName "filebrowser.exe"

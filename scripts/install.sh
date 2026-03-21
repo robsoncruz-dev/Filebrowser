@@ -5,7 +5,7 @@
 set -e
 
 APP_NAME="Filebrowser"
-APP_VERSION="0.3.0"
+APP_VERSION="0.3.2"
 INSTALL_DIR="$HOME/.local/share/filebrowser"
 BIN_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/filebrowser"
