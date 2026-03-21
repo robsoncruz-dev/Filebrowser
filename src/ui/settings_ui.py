@@ -8,9 +8,11 @@ O atalho é editável, salvo no metadata, e inserido automaticamente no config d
 import os
 import subprocess
 
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gdk
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
+    QLineEdit, QPushButton, QFrame, QApplication
+)
+from PyQt6.QtCore import Qt
 
 from src.ui.about import APP_NAME
 from src.i18n import t
@@ -113,21 +115,17 @@ def apply_shortcut(key: str, wm: str = "") -> tuple:
             with open(config_path, "r") as f:
                 lines = f.readlines()
 
-            # Remover binding anterior do filebrowser (se existir)
             lines = [l for l in lines if SHORTCUT_MARKER not in l]
 
-            # Remover linhas em branco extras no final
             while lines and lines[-1].strip() == "":
                 lines.pop()
 
-            # Adicionar novo binding com marcador
             binding_line = tmpl["template"].format(key=key)
             lines.append(f"\n{binding_line}  {SHORTCUT_MARKER}\n")
 
             with open(config_path, "w") as f:
                 f.writelines(lines)
 
-            # Recarregar WM para aplicar
             reload_cmd = "i3-msg" if wm == "i3" else "swaymsg"
             subprocess.run(
                 [reload_cmd, "reload"],
@@ -140,7 +138,6 @@ def apply_shortcut(key: str, wm: str = "") -> tuple:
             return False, f"Error: {e}"
 
     else:
-        # GNOME, KDE, XFCE — instruções manuais
         return False, t("set_shortcut_manual")
 
 
@@ -171,195 +168,156 @@ def apply_saved_shortcut():
         pass
 
 
-class SettingsWindow(Gtk.Window):
+class SettingsWindow(QDialog):
     """Janela de configurações do app."""
 
-    def __init__(self, parent: Gtk.Window):
-        super().__init__(
-            title=t("set_title", app=APP_NAME),
-            transient_for=parent,
-            modal=True,
-            default_width=500,
-            default_height=460,
-        )
-        self.set_resizable(False)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(t("set_title", app=APP_NAME))
+        self.setFixedSize(500, 460)
+        self.setModal(True)
         self._wm = _detect_wm()
         self._tmpl = WM_TEMPLATES.get(self._wm, WM_TEMPLATES["generic"])
         self._build_ui()
 
     def _build_ui(self):
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        main_box.set_margin_top(20)
-        main_box.set_margin_bottom(20)
-        main_box.set_margin_start(24)
-        main_box.set_margin_end(24)
-        self.set_child(main_box)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(14)
 
         # ─── Idioma ──────────────────────────────────────────────────
+        lang_title = QLabel(f"<b>{t('set_lang_title')}</b>")
+        lang_title.setStyleSheet("font-size: 16px;")
+        main_layout.addWidget(lang_title)
 
-        lang_title = Gtk.Label()
-        lang_title.set_markup(
-            f"<span weight='bold' size='large'>{t('set_lang_title')}</span>"
-        )
-        lang_title.set_halign(Gtk.Align.START)
-        main_box.append(lang_title)
+        lang_desc = QLabel(t("set_lang_desc"))
+        lang_desc.setProperty("class", "dim-label")
+        main_layout.addWidget(lang_desc)
 
-        lang_desc = Gtk.Label(label=t("set_lang_desc"))
-        lang_desc.set_halign(Gtk.Align.START)
-        lang_desc.add_css_class("dim-label")
-        main_box.append(lang_desc)
-
-        lang_names = [name for _, name in LANGUAGES]
-        self.lang_dropdown = Gtk.DropDown.new_from_strings(lang_names)
+        self.lang_dropdown = QComboBox()
+        for _, name in LANGUAGES:
+            self.lang_dropdown.addItem(name)
 
         from src.i18n import get_language
         current_lang = get_language()
         for i, (code, _) in enumerate(LANGUAGES):
             if code == current_lang:
-                self.lang_dropdown.set_selected(i)
+                self.lang_dropdown.setCurrentIndex(i)
                 break
 
-        self.lang_dropdown.connect("notify::selected", self._on_lang_changed)
-        main_box.append(self.lang_dropdown)
+        self.lang_dropdown.currentIndexChanged.connect(self._on_lang_changed)
+        main_layout.addWidget(self.lang_dropdown)
 
-        lang_note = Gtk.Label()
-        lang_note.set_markup(
-            f"<span size='small'>{t('set_lang_note')}</span>"
-        )
-        lang_note.set_halign(Gtk.Align.START)
-        lang_note.add_css_class("dim-label")
-        main_box.append(lang_note)
+        lang_note = QLabel(t('set_lang_note'))
+        lang_note.setStyleSheet("font-size: 11px;")
+        lang_note.setProperty("class", "dim-label")
+        main_layout.addWidget(lang_note)
 
         # ─── Separador ───────────────────────────────────────────────
-
-        main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(sep)
 
         # ─── Atalho de Teclado ───────────────────────────────────────
+        shortcut_title = QLabel(f"<b>{t('set_shortcut_title')}</b>")
+        shortcut_title.setStyleSheet("font-size: 16px;")
+        main_layout.addWidget(shortcut_title)
 
-        shortcut_title = Gtk.Label()
-        shortcut_title.set_markup(
-            f"<span weight='bold' size='large'>{t('set_shortcut_title')}</span>"
-        )
-        shortcut_title.set_halign(Gtk.Align.START)
-        main_box.append(shortcut_title)
+        wm_label = QLabel(t("set_wm_detected", wm=self._tmpl["name"]))
+        main_layout.addWidget(wm_label)
 
-        wm_label = Gtk.Label()
-        wm_label.set_markup(t("set_wm_detected", wm=self._tmpl["name"]))
-        wm_label.set_halign(Gtk.Align.START)
-        main_box.append(wm_label)
+        file_label = QLabel(t('set_wm_file', file=self._tmpl['file']))
+        file_label.setStyleSheet("font-size: 11px;")
+        file_label.setProperty("class", "dim-label")
+        main_layout.addWidget(file_label)
 
-        file_label = Gtk.Label()
-        file_label.set_markup(
-            f"<span size='small'>{t('set_wm_file', file=self._tmpl['file'])}</span>"
-        )
-        file_label.set_halign(Gtk.Align.START)
-        file_label.add_css_class("dim-label")
-        main_box.append(file_label)
-
-        # Campo editável para o atalho
-        shortcut_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-        shortcut_label = Gtk.Label(label=t("set_shortcut_label"))
-        shortcut_box.append(shortcut_label)
+        # Campo editável
+        shortcut_layout = QHBoxLayout()
+        shortcut_label = QLabel(t("set_shortcut_label"))
+        shortcut_layout.addWidget(shortcut_label)
 
         saved_shortcut = get_metadata("shortcut", DEFAULT_SHORTCUT)
-        self.shortcut_entry = Gtk.Entry()
-        self.shortcut_entry.set_text(saved_shortcut)
-        self.shortcut_entry.set_placeholder_text(t("set_shortcut_placeholder"))
-        self.shortcut_entry.set_hexpand(True)
-        self.shortcut_entry.connect("changed", self._on_shortcut_edited)
-        shortcut_box.append(self.shortcut_entry)
+        self.shortcut_entry = QLineEdit()
+        self.shortcut_entry.setText(saved_shortcut)
+        self.shortcut_entry.setPlaceholderText(t("set_shortcut_placeholder"))
+        self.shortcut_entry.textChanged.connect(self._on_shortcut_edited)
+        shortcut_layout.addWidget(self.shortcut_entry)
 
-        save_btn = Gtk.Button(label=t("set_save_shortcut"))
-        save_btn.connect("clicked", self._on_save_shortcut)
-        shortcut_box.append(save_btn)
+        save_btn = QPushButton(t("set_save_shortcut"))
+        save_btn.clicked.connect(self._on_save_shortcut)
+        shortcut_layout.addWidget(save_btn)
 
-        main_box.append(shortcut_box)
+        main_layout.addLayout(shortcut_layout)
 
         # Instrução
-        instruction_label = Gtk.Label(label=t("set_instruction"))
-        instruction_label.set_halign(Gtk.Align.START)
-        instruction_label.set_wrap(True)
-        instruction_label.add_css_class("dim-label")
-        main_box.append(instruction_label)
+        instruction_label = QLabel(t("set_instruction"))
+        instruction_label.setWordWrap(True)
+        instruction_label.setProperty("class", "dim-label")
+        main_layout.addWidget(instruction_label)
 
-        # Comando gerado (frame)
-        cmd_frame = Gtk.Frame()
-        cmd_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        cmd_inner.set_margin_top(8)
-        cmd_inner.set_margin_bottom(8)
-        cmd_inner.set_margin_start(10)
-        cmd_inner.set_margin_end(10)
+        # Comando gerado
+        cmd_frame = QFrame()
+        cmd_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        cmd_layout = QVBoxLayout(cmd_frame)
+        cmd_layout.setContentsMargins(10, 8, 10, 8)
+        
+        gen_label = QLabel(t('set_generated_cmd'))
+        gen_label.setStyleSheet("font-size: 11px;")
+        gen_label.setProperty("class", "dim-label")
+        cmd_layout.addWidget(gen_label)
 
-        gen_label = Gtk.Label()
-        gen_label.set_markup(
-            f"<span size='small'>{t('set_generated_cmd')}</span>"
-        )
-        gen_label.set_halign(Gtk.Align.START)
-        gen_label.add_css_class("dim-label")
-        cmd_inner.append(gen_label)
-
-        self.cmd_label = Gtk.Label()
-        self.cmd_label.set_halign(Gtk.Align.START)
-        self.cmd_label.set_selectable(True)
-        self.cmd_label.set_wrap(True)
+        self.cmd_label = QLabel()
+        self.cmd_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.cmd_label.setWordWrap(True)
         self._update_command_preview(saved_shortcut)
-        cmd_inner.append(self.cmd_label)
-
-        cmd_frame.set_child(cmd_inner)
-        main_box.append(cmd_frame)
+        cmd_layout.addWidget(self.cmd_label)
+        main_layout.addWidget(cmd_frame)
 
         # Botões
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_box.set_halign(Gtk.Align.CENTER)
+        btn_layout = QHBoxLayout()
+        btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        copy_btn = QPushButton(t("set_copy_cmd"))
+        copy_btn.clicked.connect(self._on_copy_cmd)
+        btn_layout.addWidget(copy_btn)
 
-        copy_btn = Gtk.Button(label=t("set_copy_cmd"))
-        copy_btn.connect("clicked", self._on_copy_cmd)
-        btn_box.append(copy_btn)
+        close_btn = QPushButton(t("set_close"))
+        close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(close_btn)
 
-        close_btn = Gtk.Button(label=t("set_close"))
-        close_btn.connect("clicked", lambda b: self.close())
-        btn_box.append(close_btn)
-
-        main_box.append(btn_box)
+        main_layout.addLayout(btn_layout)
 
         # Status
-        self.status_label = Gtk.Label(label="")
-        self.status_label.set_wrap(True)
-        main_box.append(self.status_label)
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        main_layout.addWidget(self.status_label)
 
     def _update_command_preview(self, shortcut: str):
-        """Atualiza o preview do comando com o atalho atual."""
         cmd = self._tmpl["template"].format(key=shortcut)
-        self.cmd_label.set_markup(f"<tt>{cmd}</tt>")
+        self.cmd_label.setText(cmd)
+        self.cmd_label.setStyleSheet("font-family: monospace;")
         self._current_cmd = cmd
 
-    def _on_shortcut_edited(self, entry):
-        """Atualiza preview quando o atalho é editado."""
-        key = entry.get_text().strip() or DEFAULT_SHORTCUT
+    def _on_shortcut_edited(self, text):
+        key = text.strip() or DEFAULT_SHORTCUT
         self._update_command_preview(key)
 
-    def _on_save_shortcut(self, button):
-        """Salva o atalho escolhido e aplica no WM."""
-        key = self.shortcut_entry.get_text().strip() or DEFAULT_SHORTCUT
+    def _on_save_shortcut(self):
+        key = self.shortcut_entry.text().strip() or DEFAULT_SHORTCUT
         save_metadata("shortcut", key)
 
-        # Aplicar no WM (insere no config e recarrega)
         success, message = apply_shortcut(key, self._wm)
-        self.status_label.set_text(message)
+        self.status_label.setText(message)
 
-    def _on_lang_changed(self, dropdown, _pspec):
-        """Salva o idioma escolhido."""
-        idx = dropdown.get_selected()
+    def _on_lang_changed(self, idx):
         if idx < len(LANGUAGES):
             code, name = LANGUAGES[idx]
             from src.i18n import save_language
             save_language(code)
-            self.status_label.set_text(t("set_lang_changed", name=name))
+            self.status_label.setText(t("set_lang_changed", name=name))
 
-    def _on_copy_cmd(self, button):
-        """Copia o comando gerado para a área de transferência."""
-        display = Gdk.Display.get_default()
-        clipboard = display.get_clipboard()
-        clipboard.set(self._current_cmd)
-        self.status_label.set_text(t("set_copied"))
+    def _on_copy_cmd(self):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self._current_cmd)
+        self.status_label.setText(t("set_copied"))

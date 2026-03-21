@@ -70,8 +70,7 @@ jobs:
             -v "$VERSION" \
             -a all \
             -d "python3 (>= 3.10)" \
-            -d "python3-gi" \
-            -d "gir1.2-gtk-4.0" \
+            -d "python3-pyqt6" \
             -m "Robson Cruz <robsoncruz.dev@gmail.com>" \
             --description "Launcher de PDFs estilo Spotlight para Linux" \
             -f \
@@ -86,8 +85,7 @@ jobs:
             -v "$VERSION" \
             -a noarch \
             -d "python3 >= 3.10" \
-            -d "python3-gobject" \
-            -d "gtk4" \
+            -d "python3-pyqt6" \
             -m "Robson Cruz <robsoncruz.dev@gmail.com>" \
             --description "Launcher de PDFs estilo Spotlight para Linux" \
             -f \
@@ -151,34 +149,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up MSYS2
-        uses: msys2/setup-msys2@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-gtk4
-            mingw-w64-ucrt-x86_64-python3
-            mingw-w64-ucrt-x86_64-python-gobject
-            mingw-w64-ucrt-x86_64-python-pip
-            mingw-w64-ucrt-x86_64-python-cairo
+          python-version: '3.10'
 
       - name: Install Python Dependencies
-        shell: msys2 {0}
         run: |
-          pip install --no-cache-dir pyinstaller pyinstaller-hooks-contrib
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir pyinstaller pyinstaller-hooks-contrib PyQt6
 
       - name: Build Windows Executable
-        shell: msys2 {0}
         run: |
           pyinstaller --name "filebrowser" \
             --windowed \
-            --collect-all gi \
-            --add-data "$(cygpath -w /ucrt64/lib/girepository-1.0);lib/girepository-1.0" \
-            --add-data "$(cygpath -w /ucrt64/lib/gdk-pixbuf-2.0);lib/gdk-pixbuf-2.0" \
-            --add-data "$(cygpath -w /ucrt64/share/glib-2.0/schemas);share/glib-2.0/schemas" \
-            --add-data "$(cygpath -w /ucrt64/share/icons);share/icons" \
             --add-data "src/ui/styles.css;src/ui" \
             --add-data "src/locale;src/locale" \
             --hidden-import "src.i18n" \
