@@ -11,7 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # Caminho raiz do projeto (dois níveis acima de src/config/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
