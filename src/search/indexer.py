@@ -127,11 +127,39 @@ def _save_index_timestamp(conn: sqlite3.Connection):
 # ─── Scan de Diretórios ──────────────────────────────────────────────────────
 
 
-def _should_ignore(path: Path, ignorar: list[str]) -> bool:
-    """Verifica se o caminho contém algum diretório da lista de ignorados."""
-    parts = path.parts
-    return any(ign in parts for ign in ignorar)
+def _scandir_recursive(base_path: str, max_depth: int, ignorar: set[str], current_depth: int = 0) -> list[dict]:
+    """Varredura otimizada de baixo nível via iteradores MFT/Inode."""
+    if current_depth > max_depth:
+        return []
+        
+    pdfs = []
+    try:
+        with os.scandir(base_path) as it:
+            for entry in it:
+                if entry.name.startswith(".") or entry.name in ignorar:
+                    continue
+                    
+                if entry.is_dir(follow_symlinks=False):
+                    pdfs.extend(_scandir_recursive(entry.path, max_depth, ignorar, current_depth + 1))
+                elif entry.is_file(follow_symlinks=False) and entry.name.lower().endswith('.pdf'):
+                    try:
+                        stat = entry.stat()
+                        pdfs.append({
+                            "nome": entry.name,
+                            "caminho": entry.path,
+                            "diretorio": base_path,
+                            "tamanho": stat.st_size,
+                            "modificado": stat.st_mtime,
+                        })
+                    except OSError:
+                        pass
+    except (PermissionError, OSError):
+        pass
+        
+    return pdfs
 
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def scan_directory_list(
     diretorios: list[Path],
@@ -140,56 +168,29 @@ def scan_directory_list(
     on_found: callable = None,
 ) -> list[dict]:
     """
-    Varre uma lista específica de diretórios e retorna os PDFs encontrados.
-    Usado para indexar locais e nuvem separadamente.
-
-    Args:
-        on_found: Callback opcional chamado a cada PDF encontrado (recebe contagem).
+    Varre uma lista de diretórios em paralelo usando ThreadPoolExecutor.
     """
-    pdfs = []
+    todas_pdfs = []
+    ignorar_set = set(ignorar)
+    
+    max_workers = min(32, (os.cpu_count() or 1) * 4)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_scandir_recursive, str(d), max_depth, ignorar_set): d 
+            for d in diretorios if d.exists()
+        }
+        
+        for future in as_completed(futures):
+            try:
+                batch = future.result()
+                todas_pdfs.extend(batch)
+                if on_found and batch:
+                    # Emite um relatório por lote resolvido
+                    on_found(len(todas_pdfs), batch[-1])
+            except Exception:
+                pass
 
-    for base_dir in diretorios:
-        if not base_dir.exists():
-            continue
-
-        base_depth = len(base_dir.parts)
-        for dirpath, dirnames, filenames in os.walk(base_dir):
-            current = Path(dirpath)
-
-            # Respeitar profundidade máxima
-            if len(current.parts) - base_depth >= max_depth:
-                dirnames.clear()
-                continue
-
-            # Filtrar diretórios ignorados
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in ignorar and not d.startswith(".")
-            ]
-
-            for filename in filenames:
-                if not filename.lower().endswith(".pdf"):
-                    continue
-
-                filepath = current / filename
-                if _should_ignore(filepath, ignorar):
-                    continue
-
-                try:
-                    stat = filepath.stat()
-                    pdfs.append({
-                        "nome": filename,
-                        "caminho": str(filepath),
-                        "diretorio": str(current),
-                        "tamanho": stat.st_size,
-                        "modificado": stat.st_mtime,
-                    })
-                    if on_found:
-                        on_found(len(pdfs), pdfs[-1])
-                except (PermissionError, OSError):
-                    continue
-
-    return pdfs
+    return todas_pdfs
 
 
 # ─── Indexação Delta ─────────────────────────────────────────────────────────
@@ -244,10 +245,9 @@ def _delta_sync(conn: sqlite3.Connection, pdfs: list[dict], fonte: str) -> int:
     # Remover PDFs que não existem mais no sistema de arquivos
     removed = set(existing.keys()) - found_paths
     if removed:
-        placeholders = ",".join("?" for _ in removed)
-        conn.execute(
-            f"DELETE FROM pdfs WHERE caminho IN ({placeholders})",
-            list(removed),
+        conn.executemany(
+            "DELETE FROM pdfs WHERE caminho = ?",
+            [(r,) for r in removed],
         )
 
     conn.commit()
@@ -280,19 +280,80 @@ def build_index_local(
 
 def scan_cloud(config: AppConfig, on_found: callable = None) -> list[dict]:
     """
-    Varre as pastas de nuvem e retorna os PDFs encontrados.
-    Função SÍNCRONA — o controle de timeout fica com o chamador.
+    Varre instâncias de nuvem headless registradas usando `rclone lsjson` de forma assíncrona.
+    Não depende de rclone mounte FUSE.
     """
-    dirs_nuvem = config.busca.diretorios_nuvem
-    if not dirs_nuvem:
+    remotes = config.nuvem.remotes
+    if not remotes:
         return []
 
-    return scan_directory_list(
-        dirs_nuvem,
-        config.busca.profundidade_nuvem,
-        config.busca.ignorar,
-        on_found=on_found,
-    )
+    todas_pdfs = []
+    ignorar_set = set(config.busca.ignorar)
+    
+    import json
+    import subprocess
+    
+    def _fetch_remote(remote_name: str) -> list[dict]:
+        pdfs = []
+        try:
+            cmd = [
+                "rclone", "lsjson", f"{remote_name}:",
+                "--include", "*.pdf",
+                "--fast-list", "-R"
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0:
+                items = json.loads(result.stdout)
+                for item in items:
+                    if item.get("IsDir"):
+                        continue
+                        
+                    path_str = item.get("Path", "")
+                    
+                    # Checagem leve de paths ignorados
+                    should_ign = False
+                    for ign in ignorar_set:
+                        if f"/{ign.lower()}/" in f"/{path_str.lower()}":
+                            should_ign = True
+                            break
+                    if should_ign:
+                        continue
+                        
+                    mtime = 0.0
+                    modtime = item.get("ModTime", "")
+                    if modtime:
+                        try:
+                            if modtime.endswith("Z"):
+                                modtime = modtime[:-1] + "+00:00"
+                            mtime = datetime.fromisoformat(modtime).timestamp()
+                        except ValueError:
+                            pass
+                            
+                    pdfs.append({
+                        "nome": item.get("Name", ""),
+                        "caminho": f"cloud://{remote_name}/{path_str}",
+                        "diretorio": f"Nuvem: {remote_name}",
+                        "tamanho": item.get("Size", 0),
+                        "modificado": mtime,
+                    })
+        except Exception:
+            pass
+        return pdfs
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=max(1, len(remotes))) as executor:
+        futures = {executor.submit(_fetch_remote, r): r for r in remotes.keys()}
+        for future in as_completed(futures):
+            try:
+                batch = future.result()
+                todas_pdfs.extend(batch)
+                if on_found and batch:
+                    on_found(len(todas_pdfs), batch[-1])
+            except Exception:
+                pass
+
+    return todas_pdfs
 
 
 def save_cloud_results(pdfs: list[dict], db_path: Path | None = None) -> int:

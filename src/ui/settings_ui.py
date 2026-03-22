@@ -8,6 +8,7 @@ O atalho é editável, salvo no metadata, e inserido automaticamente no config d
 import os
 import subprocess
 
+import sys
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
     QLineEdit, QPushButton, QFrame, QApplication
@@ -63,6 +64,11 @@ WM_TEMPLATES = {
                     "# Command: filebrowser\n"
                     "# Shortcut: {key}",
     },
+    "windows": {
+        "name": "Windows",
+        "file": "API nativa",
+        "template": "Windows Global Hook ativado: {key}",
+    },
     "generic": {
         "name": "Linux",
         "file": "WM config file",
@@ -75,7 +81,10 @@ SHORTCUT_MARKER = "# filebrowser-shortcut"
 
 
 def _detect_wm() -> str:
-    """Detecta o Window Manager ativo."""
+    """Detecta o Window Manager ativo ou SO."""
+    if sys.platform == "win32":
+        return "windows"
+        
     desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
     session = os.environ.get("DESKTOP_SESSION", "").lower()
     combined = f"{desktop} {session}"
@@ -92,9 +101,10 @@ def _detect_wm() -> str:
     return "generic"
 
 
-def apply_shortcut(key: str, wm: str = "") -> tuple:
+def apply_shortcut(key: str, wm: str = "", callback=None) -> tuple:
     """
-    Aplica o atalho no WM:
+    Aplica o atalho:
+    - Windows: Regista global hotkey dinâmico usando módulo keyboard
     - i3/Sway: insere binding no config com marcador, recarrega WM
     - Outros: retorna instruções manuais
 
@@ -103,6 +113,18 @@ def apply_shortcut(key: str, wm: str = "") -> tuple:
     """
     if not wm:
         wm = _detect_wm()
+        
+    if wm == "windows":
+        try:
+            import keyboard
+            keyboard.unhook_all_hotkeys()
+            if callback:
+                keyboard.add_hotkey(key, callback, suppress=True)
+            return True, t("set_shortcut_active", key=key)
+        except ValueError as e:
+            return False, f"Atalho inválido ou em uso pelo SO: {e}"
+        except ImportError:
+            return False, "Módulo de teclado não instalado no SO."
 
     if wm in ("i3", "sway"):
         tmpl = WM_TEMPLATES[wm]
@@ -158,14 +180,15 @@ def remove_shortcut_from_config():
                 pass
 
 
-def apply_saved_shortcut():
+def apply_saved_shortcut(callback=None):
     """Aplica o atalho salvo no WM (chamado no startup do app). Silencioso."""
     try:
         saved = get_metadata("shortcut", "")
         if saved:
-            apply_shortcut(saved)
-    except Exception:
-        pass
+            return apply_shortcut(saved, callback=callback)
+    except Exception as e:
+        return False, str(e)
+    return True, ""
 
 
 class SettingsWindow(QDialog):
@@ -305,10 +328,20 @@ class SettingsWindow(QDialog):
 
     def _on_save_shortcut(self):
         key = self.shortcut_entry.text().strip() or DEFAULT_SHORTCUT
-        save_metadata("shortcut", key)
+        
+        # Validar em tempo real antes de salvar!
+        cb = None
+        if hasattr(self, 'parent') and self.parent():
+            if hasattr(self.parent(), 'fb_app'):
+                cb = self.parent().fb_app._on_tray_show
 
-        success, message = apply_shortcut(key, self._wm)
-        self.status_label.setText(message)
+        success, message = apply_shortcut(key, self._wm, callback=cb)
+        
+        if success:
+            save_metadata("shortcut", key)
+            self.status_label.setText(message)
+        else:
+            self.status_label.setText("⚠ Erro ao salvar: " + message)
 
     def _on_lang_changed(self, idx):
         if idx < len(LANGUAGES):

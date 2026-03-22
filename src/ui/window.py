@@ -15,10 +15,10 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QLabel,
-    QFrame, QPushButton
+    QFrame, QPushButton, QSystemTrayIcon, QMenu
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QEvent, QPoint
-from PyQt6.QtGui import QKeyEvent, QIcon
+from PyQt6.QtGui import QKeyEvent, QIcon, QAction
 
 from src.search.finder import search_pdfs
 from src.search.indexer import (
@@ -27,7 +27,7 @@ from src.search.indexer import (
     get_counts_by_source, get_last_indexed_at, get_last_cloud_count,
     save_metadata,
 )
-from src.search.cloud_mount import mount_all
+
 from src.config.settings import AppConfig, CACHE_DIR
 from src.i18n import t, load_saved_language
 
@@ -35,10 +35,6 @@ from src.i18n import t, load_saved_language
 load_saved_language()
 
 CSS_FILE = Path(__file__).resolve().parent / "styles.css"
-TRAY_STATE_FILE = CACHE_DIR / "tray_state.json"
-PID_FILE = CACHE_DIR / "app.pid"
-TRAY_CMD_FILE = CACHE_DIR / "tray_cmd.json"
-TRAY_SCRIPT = Path(__file__).resolve().parent / "tray.py"
 
 class IndexSignals(QObject):
     local_found = pyqtSignal(int, object)
@@ -240,6 +236,12 @@ class FilebrowserWindow(QMainWindow):
         self.reindex_btn.clicked.connect(self._on_reindex_clicked)
         status_layout.addWidget(self.reindex_btn)
 
+        self.settings_btn = QPushButton("⚙️")
+        self.settings_btn.setObjectName("settings-btn")
+        self.settings_btn.setToolTip(t("tray_settings"))
+        self.settings_btn.clicked.connect(self._on_settings_clicked)
+        status_layout.addWidget(self.settings_btn)
+
         main_layout.addWidget(status_box)
 
     def eventFilter(self, obj, event):
@@ -331,22 +333,8 @@ class FilebrowserWindow(QMainWindow):
         self._signals.local_found.emit(local_count, None)
         self._signals.status_update.emit(f"✅ {local_count} PDFs locais")
 
-        cloud_dirs = self.config.busca.diretorios_nuvem
-        if cloud_dirs:
-            if self.config.nuvem.auto_montar and self.config.nuvem.remotes:
-                self._signals.status_update.emit("☁ Montando nuvem...")
-                mount_results = mount_all(self.config.nuvem.remotes)
-                mounted = sum(1 for ok in mount_results.values() if ok)
-                total_remotes = len(mount_results)
-                if mounted == 0:
-                    self._signals.status_update.emit(f"⚠ Nuvem indisponível ({local_count} PDFs locais)")
-                    self._signals.cloud_fail.emit()
-                    self._signals.done.emit(local_count)
-                    return
-                elif mounted < total_remotes:
-                    failed = [r for r, ok in mount_results.items() if not ok]
-                    self._signals.status_update.emit(f"⚠ {', '.join(failed)} falhou · montando restante...")
-
+        remotes = self.config.nuvem.remotes
+        if remotes:
             ref_str = f" / ~{self._last_cloud_ref}" if self._last_cloud_ref > 0 else ""
             self._signals.status_update.emit(f"☁ Indexando nuvem...{ref_str} (pode demorar)")
 
@@ -502,6 +490,33 @@ class FilebrowserWindow(QMainWindow):
         caminho = pdf["caminho"]
         leitor = self.config.geral.leitor
 
+        if caminho.startswith("cloud://"):
+            import tempfile
+            from PyQt6.QtCore import Qt
+            from PyQt6.QtWidgets import QApplication
+            
+            parts = caminho[8:].split("/", 1)
+            remote = parts[0]
+            cloud_path = parts[1] if len(parts) > 1 else ""
+            
+            safe_name = os.path.basename(cloud_path)
+            tmp_dir = os.path.join(tempfile.gettempdir(), f"filebrowser_cloud_{remote}")
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_path = os.path.join(tmp_dir, safe_name)
+            
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                subprocess.run(
+                    ["rclone", "copyto", f"{remote}:{cloud_path}", tmp_path],
+                    check=True, capture_output=True
+                )
+                caminho = tmp_path
+            except Exception:
+                QApplication.restoreOverrideCursor()
+                return
+            finally:
+                QApplication.restoreOverrideCursor()
+
         try:
             if sys.platform == "win32" and leitor.lower() not in ["zathura", "evince", "okular"]:
                 os.startfile(caminho)
@@ -550,22 +565,17 @@ class FilebrowserWindow(QMainWindow):
 
     def _on_force_close(self):
         self._indexing = False
-        self.fb_app._kill_tray()
         self.close()
         QApplication.quit()
 
     def _update_tray_state(self):
-        try:
-            TRAY_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            state = {
-                "indexing": self._indexing,
-                "local": self._local_count,
-                "cloud": self._cloud_count,
-                "status": self.status_label.text(),
-            }
-            TRAY_STATE_FILE.write_text(json.dumps(state))
-        except OSError:
-            pass
+        if hasattr(self.fb_app, 'update_tray_state'):
+            self.fb_app.update_tray_state(
+                self._indexing, 
+                self._local_count, 
+                self._cloud_count, 
+                self.status_label.text()
+            )
 
 
 class FilebrowserApp:
@@ -574,100 +584,117 @@ class FilebrowserApp:
         self.app = QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
         self._win = None
-        self._tray_process = None
-        self._cmd_timer = None
+        self._tray = None
+        self._item_status = None
 
     def run(self, argv):
         # Create Main Window
         self._win = FilebrowserWindow(self.app, self.config, self)
-        self._win.show()
 
-        self._write_pid()
-        self._ensure_tray()
+        # Build tray icon natively
+        self._build_tray()
 
-        from src.ui.settings_ui import apply_saved_shortcut
-        apply_saved_shortcut()
-
-        self._cmd_timer = QTimer()
-        self._cmd_timer.timeout.connect(self._process_tray_command)
-        self._cmd_timer.start(1000)
-
-        # Linux custom signal handling mapped to simple file check
-        if sys.platform != "win32":
-            pass # Polling 1hz is sufficient, but we will rely on it instead of SIGUSR1 complexity in PyQt
+        from src.ui.settings_ui import apply_saved_shortcut, _detect_wm
+        success, msg = apply_saved_shortcut(callback=self._on_tray_show)
+        
+        if success is False and _detect_wm() == "windows":
+            self._on_tray_settings()
 
         return self.app.exec()
 
-    def _write_pid(self):
-        try:
-            PID_FILE.parent.mkdir(parents=True, exist_ok=True)
-            PID_FILE.write_text(str(os.getpid()))
-        except OSError:
-            pass
+    def _build_tray(self):
+        self._tray = QSystemTrayIcon(self._win)
+        self._tray.setIcon(QIcon.fromTheme("folder"))
+        self._tray.setToolTip("Filebrowser")
+        
+        menu = QMenu()
+        self._item_status = QAction(t("tray_title"), self._win)
+        self._item_status.setEnabled(False)
+        menu.addAction(self._item_status)
+        menu.addSeparator()
 
-    def _cleanup_files(self):
-        for f in (PID_FILE, TRAY_STATE_FILE, TRAY_CMD_FILE):
-            try:
-                f.unlink(missing_ok=True)
-            except OSError:
-                pass
+        item_show = QAction(t("tray_show"), self._win)
+        item_show.triggered.connect(self._on_tray_show)
+        menu.addAction(item_show)
 
-    def _ensure_tray(self):
-        if self._tray_process and self._tray_process.poll() is None:
+        item_reindex = QAction(t("tray_reindex"), self._win)
+        item_reindex.triggered.connect(self._on_tray_reindex)
+        menu.addAction(item_reindex)
+
+        menu.addSeparator()
+
+        item_settings = QAction(t("tray_settings"), self._win)
+        item_settings.triggered.connect(self._on_tray_settings)
+        menu.addAction(item_settings)
+
+        item_about = QAction(t("tray_about"), self._win)
+        item_about.triggered.connect(self._on_tray_about)
+        menu.addAction(item_about)
+
+        item_feedback = QAction(t("tray_feedback"), self._win)
+        item_feedback.triggered.connect(self._on_tray_feedback)
+        menu.addAction(item_feedback)
+
+        item_donate = QAction(t("tray_donate"), self._win)
+        item_donate.triggered.connect(self._on_tray_donate)
+        menu.addAction(item_donate)
+
+        menu.addSeparator()
+
+        item_quit = QAction(t("tray_quit"), self._win)
+        item_quit.triggered.connect(self._on_tray_quit)
+        menu.addAction(item_quit)
+
+        self._tray.setContextMenu(menu)
+        self._tray.show()
+
+    def _on_tray_show(self):
+        self._win.show()
+        self._win.activateWindow()
+        QTimer.singleShot(50, self._win._force_floating)
+
+    def _on_tray_reindex(self):
+        self._win.show()
+        self._win.activateWindow()
+        QTimer.singleShot(50, self._win._force_floating)
+        QTimer.singleShot(50, self._win._start_background_index)
+
+    def _on_tray_settings(self):
+        from src.ui.settings_ui import SettingsWindow
+        win = SettingsWindow(self._win)
+        win.show()
+
+    def _on_tray_about(self):
+        from src.ui.about import AboutWindow
+        win = AboutWindow(self._win)
+        win.show()
+
+    def _on_tray_feedback(self):
+        from src.ui.feedback import FeedbackWindow
+        win = FeedbackWindow(self._win)
+        win.show()
+
+    def _on_tray_donate(self):
+        from src.ui.donate import DonateWindow
+        win = DonateWindow(self._win)
+        win.show()
+
+    def _on_tray_quit(self):
+        QApplication.quit()
+
+    def update_tray_state(self, indexing, local_count, cloud_count, status_text):
+        if not self._tray or not self._item_status:
             return
-        try:
-            tray_log = Path.home() / ".cache" / "filebrowser" / "tray.log"
-            log_file = open(str(tray_log), "w")
-            self._tray_process = subprocess.Popen(
-                [sys.executable, str(TRAY_SCRIPT)],
-                stdout=log_file, stderr=log_file,
-            )
-        except (FileNotFoundError, OSError):
-            pass
+            
+        icon_theme = "folder-download" if indexing else "folder"
+        self._tray.setIcon(QIcon.fromTheme(icon_theme))
 
-    def _kill_tray(self):
-        if self._tray_process and self._tray_process.poll() is None:
-            self._tray_process.terminate()
-            self._tray_process = None
+        if indexing:
+            label = t("tray_indexing", local=local_count, cloud=cloud_count)
+        elif local_count + cloud_count > 0:
+            label = t("tray_indexed", n=local_count + cloud_count)
+        else:
+            label = t("tray_title")
 
-    def _process_tray_command(self):
-        try:
-            if not TRAY_CMD_FILE.exists():
-                if self._win:
-                    self._win._update_tray_state()
-                return
-            data = json.loads(TRAY_CMD_FILE.read_text())
-            TRAY_CMD_FILE.unlink(missing_ok=True)
-
-            cmd = data.get("command", "")
-            if cmd == "show" and self._win:
-                self._win.show()
-                self._win.activateWindow()
-                QTimer.singleShot(50, self._win._force_floating)
-            elif cmd == "reindex" and self._win:
-                self._win.show()
-                self._win.activateWindow()
-                QTimer.singleShot(50, self._win._force_floating)
-                QTimer.singleShot(50, self._win._start_background_index)
-            elif cmd == "about" and self._win:
-                from src.ui.about import AboutWindow
-                win = AboutWindow(self._win)
-                win.show()
-            elif cmd == "feedback" and self._win:
-                from src.ui.feedback import FeedbackWindow
-                win = FeedbackWindow(self._win)
-                win.show()
-            elif cmd == "donate" and self._win:
-                from src.ui.donate import DonateWindow
-                win = DonateWindow(self._win)
-                win.show()
-            elif cmd == "settings" and self._win:
-                from src.ui.settings_ui import SettingsWindow
-                win = SettingsWindow(self._win)
-                win.show()
-            elif cmd == "quit":
-                self._kill_tray()
-                self._cleanup_files()
-                self.app.quit()
-        except (json.JSONDecodeError, OSError):
-            pass
+        self._tray.setToolTip(label)
+        self._item_status.setText(label)

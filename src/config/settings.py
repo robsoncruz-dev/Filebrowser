@@ -52,12 +52,36 @@ class SearchConfig:
 
     @property
     def diretorios_expandidos(self) -> list[Path]:
-        """Retorna os diretórios de busca com ~ expandido e como Path."""
+        """Retorna os diretórios de busca com ~ expandido (incluindo mídias externas dinâmicas)."""
         paths = []
         for d in self.diretorios:
             p = Path(d).expanduser().resolve()
-            if p.exists() and p.is_dir():
+            if p.exists() and p.is_dir() and p not in paths:
                 paths.append(p)
+                
+        # Detecção Híbrida Mídia Externa (Discos e HDs secundarios via psutil)
+        try:
+            import psutil
+            for part in psutil.disk_partitions(all=False):
+                if not part.mountpoint or 'cdrom' in part.opts or part.fstype == '':
+                    continue
+                
+                mp = Path(part.mountpoint).resolve()
+                
+                if sys.platform == "win32":
+                    # Evitar C:\ root para não varrer sistema, pois ~/ já é lido no C:
+                    if str(mp).upper().startswith("C:\\"):
+                        continue
+                else:
+                    # Em Linux, evitar root, /boot e dependências do sistema
+                    if str(mp) == "/" or str(mp).startswith("/boot") or str(mp).startswith("/snap"):
+                        continue
+                        
+                if mp.exists() and mp.is_dir() and mp not in paths:
+                    paths.append(mp)
+        except (ImportError, OSError):
+            pass
+            
         return paths
 
     @property
@@ -132,12 +156,29 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     if sys.platform == "win32":
         default_busca_dirs = ["~/Documents", "~/Downloads"]
         default_ignore = [".cache", "node_modules", ".git", "AppData", "Local Settings"]
+        
+        # Identificação Ocorrente de Nuvens Nativas Windows (OneDrive/GDrive)
+        onedrive = os.environ.get("OneDrive")
+        if onedrive and Path(onedrive).exists():
+            default_busca_dirs.append(onedrive)
+            
+        gdrive_paths = ["G:\\My Drive", os.path.expanduser("~/Google Drive")]
+        for gdir in gdrive_paths:
+            if Path(gdir).exists():
+                default_busca_dirs.append(gdir)
     else:
         default_busca_dirs = ["~/Documentos", "~/Downloads"]
         default_ignore = [".cache", "node_modules", ".git"]
 
+    # Mesclar com as configurações do usuário sem duplicatas
+    user_dirs = busca_data.get("diretorios", default_busca_dirs)
+    if sys.platform == "win32":
+        for default_dir in default_busca_dirs:
+            if default_dir not in user_dirs:
+                user_dirs.append(default_dir)
+
     busca = SearchConfig(
-        diretorios=busca_data.get("diretorios", default_busca_dirs),
+        diretorios=user_dirs,
         profundidade_local=busca_data.get("profundidade_local", prof_fallback),
         profundidade_nuvem=busca_data.get("profundidade_nuvem", 15),
         ignorar=busca_data.get("ignorar", default_ignore),

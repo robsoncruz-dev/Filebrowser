@@ -2,19 +2,16 @@
 """
 Filebrowser — Ponto de Entrada
 
-Launcher estilo Spotlight para busca e abertura de arquivos PDF no Zathura.
+Launcher estilo Spotlight para busca e abertura de arquivos PDF.
 """
 
 import sys
-import os
-
-# PyInstaller PyQt6 handles paths automatically, no MSYS2 injections needed.
 
 from src.config.settings import load_config
 from src.ui.window import FilebrowserApp
 
 
-def main():
+def main() -> int:
     """Inicia a aplicação Filebrowser."""
     config = load_config()
     app = FilebrowserApp(config)
