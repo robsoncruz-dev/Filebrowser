@@ -411,6 +411,11 @@ class FilebrowserWindow(QMainWindow):
         self._start_background_index()
         self.search_entry.setFocus()
 
+    def _on_settings_clicked(self):
+        from src.ui.settings_ui import SettingsWindow
+        self._settings_win = SettingsWindow(self)
+        self._settings_win.show()
+
     def _on_search_changed(self, query: str):
         self._update_results(query)
 
