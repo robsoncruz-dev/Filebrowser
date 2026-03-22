@@ -88,7 +88,10 @@ def get_counts_by_source(db_path: Path | None = None) -> dict[str, int]:
         ).fetchall()
         counts = {"local": 0, "nuvem": 0}
         for fonte, count in rows:
-            counts[fonte] = count
+            if fonte == "nuvem_nativa":
+                counts["nuvem"] = counts.get("nuvem", 0) + count
+            else:
+                counts[fonte] = counts.get(fonte, 0) + count
         return counts
     finally:
         conn.close()
@@ -266,16 +269,25 @@ def build_index_local(
     path = db_path or DB_PATH
     conn = _init_db(path)
 
-    pdfs = scan_directory_list(
+    pdfs_local = scan_directory_list(
         config.busca.diretorios_locais,
         config.busca.profundidade_local,
         config.busca.ignorar,
         on_found=on_found,
     )
-    count = _delta_sync(conn, pdfs, "local")
+    count_local = _delta_sync(conn, pdfs_local, "local")
+    
+    pdfs_nativa = scan_directory_list(
+        config.busca.diretorios_nuvem_nativos_expandidos,
+        config.busca.profundidade_local,
+        config.busca.ignorar,
+        on_found=on_found,
+    )
+    count_nativa = _delta_sync(conn, pdfs_nativa, "nuvem_nativa")
+    
     _save_index_timestamp(conn)
     conn.close()
-    return count
+    return count_local + count_nativa
 
 
 def scan_cloud(config: AppConfig, on_found: callable = None) -> list[dict]:
@@ -460,7 +472,7 @@ def get_all_pdfs(db_path: Path | None = None) -> list[dict]:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT nome, caminho, diretorio, tamanho FROM pdfs ORDER BY nome"
+        "SELECT nome, caminho, diretorio, tamanho, fonte FROM pdfs ORDER BY nome"
     ).fetchall()
     conn.close()
 

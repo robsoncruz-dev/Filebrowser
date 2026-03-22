@@ -116,15 +116,63 @@ def apply_shortcut(key: str, wm: str = "", callback=None) -> tuple:
         
     if wm == "windows":
         try:
-            import keyboard
-            keyboard.unhook_all_hotkeys()
+            # Substitui a lib `keyboard` (que exige privilégios ou falha) por ctypes nativo
+            import threading
+            import ctypes
+            from ctypes import wintypes
+            import time
+
+            # Para a thread anterior se ela existir
+            global _win32_hotkey_thread, _win32_hotkey_active
+            if '_win32_hotkey_active' in globals():
+                _win32_hotkey_active = False
+
+            def _listener(key_str, cb):
+                user32 = ctypes.windll.user32
+                MOD_ALT = 0x0001
+                MOD_CONTROL = 0x0002
+                MOD_SHIFT = 0x0004
+                MOD_WIN = 0x0008
+                
+                modifiers = 0
+                vk = 0
+                parts = key_str.lower().replace(" ", "").split("+")
+                for part in parts:
+                    if part == "alt": modifiers |= MOD_ALT
+                    elif part == "ctrl": modifiers |= MOD_CONTROL
+                    elif part == "shift": modifiers |= MOD_SHIFT
+                    elif part == "win": modifiers |= MOD_WIN
+                    elif part == "space": vk = 0x20
+                    elif len(part) == 1 and 'a' <= part <= 'z':
+                        vk = ord(part.upper())
+                
+                HOTKEY_ID = 1
+                if not user32.RegisterHotKey(None, HOTKEY_ID, modifiers, vk):
+                    return
+                
+                try:
+                    msg = wintypes.MSG()
+                    while globals().get('_win32_hotkey_active', False):
+                        bRet = user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1) # PM_REMOVE
+                        if bRet:
+                            if msg.message == 0x0312 and msg.wParam == HOTKEY_ID: # WM_HOTKEY
+                                if cb:
+                                    from PyQt6.QtCore import QTimer
+                                    QTimer.singleShot(0, cb)
+                            user32.TranslateMessage(ctypes.byref(msg))
+                            user32.DispatchMessageW(ctypes.byref(msg))
+                        time.sleep(0.01)
+                finally:
+                    user32.UnregisterHotKey(None, HOTKEY_ID)
+
             if callback:
-                keyboard.add_hotkey(key, callback, suppress=True)
+                globals()['_win32_hotkey_active'] = True
+                _win32_hotkey_thread = threading.Thread(target=_listener, args=(key, callback), daemon=True)
+                _win32_hotkey_thread.start()
+            
             return True, t("set_shortcut_active", key=key)
-        except ValueError as e:
-            return False, f"Atalho inválido ou em uso pelo SO: {e}"
-        except ImportError:
-            return False, "Módulo de teclado não instalado no SO."
+        except Exception as e:
+            return False, f"Falha ao registrar Hotkey Nativo Win32: {e}"
 
     if wm in ("i3", "sway"):
         tmpl = WM_TEMPLATES[wm]

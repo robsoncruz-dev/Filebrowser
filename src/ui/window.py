@@ -150,6 +150,30 @@ class FilebrowserWindow(QMainWindow):
                     )
             except FileNotFoundError:
                 pass
+        else:
+            try:
+                import ctypes
+                # Always on top hint temporarily
+                self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+                self.show()
+                
+                hwnd = int(self.winId())
+                user32 = ctypes.windll.user32
+                kernel32 = ctypes.windll.kernel32
+                
+                current_thread_id = kernel32.GetCurrentThreadId()
+                foreground_thread_id = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), 0)
+                
+                if current_thread_id != foreground_thread_id and foreground_thread_id != 0:
+                    user32.AttachThreadInput(current_thread_id, foreground_thread_id, True)
+                    user32.SetForegroundWindow(hwnd)
+                    user32.ShowWindow(hwnd, 5) # SW_SHOW
+                    user32.AttachThreadInput(current_thread_id, foreground_thread_id, False)
+                else:
+                    user32.SetForegroundWindow(hwnd)
+                    user32.ShowWindow(hwnd, 5)
+            except Exception:
+                pass
 
     def _build_ui(self):
         central = QWidget()
@@ -460,8 +484,15 @@ class FilebrowserWindow(QMainWindow):
         layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(10)
 
-        icon = QLabel("📄")
-        icon.setStyleSheet("font-size: 22px; color: #e06060;")
+        # Usar a propriedade real `fonte` do SQLite para definir o ícone
+        fonte = pdf.get("fonte", "local")
+        is_cloud = fonte in ["nuvem", "nuvem_nativa"] or pdf["caminho"].startswith("cloud://")
+
+        icon_char = "☁️" if is_cloud else "📄"
+        icon_color = "#60a0e0" if is_cloud else "#e06060"
+
+        icon = QLabel(icon_char)
+        icon.setStyleSheet(f"font-size: 22px; color: {icon_color};")
         layout.addWidget(icon)
 
         info_box = QVBoxLayout()
@@ -651,7 +682,12 @@ class FilebrowserApp:
         menu.addAction(item_quit)
 
         self._tray.setContextMenu(menu)
+        self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._on_tray_show()
 
     def _on_tray_show(self):
         self._win.show()

@@ -5,7 +5,7 @@
 set -e
 
 APP_NAME="filebrowser"
-APP_VERSION="0.4.1"
+APP_VERSION="0.4.3"
 ARCH="all" # Python scripts are architecture independent
 DEB_NAME="${APP_NAME}_${APP_VERSION}_${ARCH}"
 BUILD_DIR="build_deb"

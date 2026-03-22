@@ -11,7 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
-__version__ = "0.4.1"
+__version__ = "0.4.3"
 
 # Caminho raiz do projeto (dois níveis acima de src/config/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -49,6 +49,8 @@ class SearchConfig:
     profundidade_nuvem: int = 15
     ignorar: list[str] = field(default_factory=lambda: [".cache", "node_modules", ".git", "AppData", "Local Settings"])
     prefixo_nuvem: str = "~/Nuvem"
+    diretorios_nuvem_nativa: list[str] = field(default_factory=list)
+
 
     @property
     def diretorios_expandidos(self) -> list[Path]:
@@ -86,13 +88,39 @@ class SearchConfig:
 
     @property
     def diretorios_locais(self) -> list[Path]:
-        """Retorna apenas os diretórios locais (não-nuvem)."""
+        """Retorna apenas os diretórios locais estritos (não-nuvem e não rclone)."""
         nuvem = Path(self.prefixo_nuvem).expanduser().resolve()
-        return [p for p in self.diretorios_expandidos if not str(p).startswith(str(nuvem))]
+        
+        # Filtra pastas de Rclone
+        base_locais = [p for p in self.diretorios_expandidos if not str(p).startswith(str(nuvem))]
+        
+        # Filtra pastas Nativas de Nuvem (OneDrive/GDrive)
+        locais_estritos = []
+        for p in base_locais:
+            is_cloud = False
+            p_str = str(p)
+            for c in self.diretorios_nuvem_nativa:
+                if p_str.startswith(str(Path(c).resolve())):
+                    is_cloud = True
+                    break
+            if not is_cloud:
+                locais_estritos.append(p)
+                
+        return locais_estritos
+
+    @property
+    def diretorios_nuvem_nativos_expandidos(self) -> list[Path]:
+        """Retorna instâncias de pastas locais do Windows que atuam como Nuvens."""
+        paths = []
+        for d in self.diretorios_nuvem_nativa:
+            p = Path(d).expanduser().resolve()
+            if p.exists() and p.is_dir() and p not in paths:
+                paths.append(p)
+        return paths
 
     @property
     def diretorios_nuvem(self) -> list[Path]:
-        """Retorna apenas os diretórios de nuvem (rclone)."""
+        """Retorna apenas os diretórios de nuvem virtuais (rclone)."""
         nuvem = Path(self.prefixo_nuvem).expanduser().resolve()
         return [p for p in self.diretorios_expandidos if str(p).startswith(str(nuvem))]
 
@@ -153,19 +181,36 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     # Suporte a profundidade separada (fallback para profundidade_maxima se existir)
     prof_fallback = busca_data.get("profundidade_maxima", 5)
     
+    nuvens_nativas = []
+    
     if sys.platform == "win32":
         default_busca_dirs = ["~/Documents", "~/Downloads"]
         default_ignore = [".cache", "node_modules", ".git", "AppData", "Local Settings"]
         
         # Identificação Ocorrente de Nuvens Nativas Windows (OneDrive/GDrive)
-        onedrive = os.environ.get("OneDrive")
-        if onedrive and Path(onedrive).exists():
-            default_busca_dirs.append(onedrive)
+        # Tenta pegar todas as variaveis possiveis de OneDrive
+        for od_key in ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"]:
+            od_val = os.environ.get(od_key)
+            if od_val and Path(od_val).exists() and od_val not in nuvens_nativas:
+                nuvens_nativas.append(od_val)
+                
+        # Busca física (Fallbacks)
+        userprofile = os.environ.get("USERPROFILE", "")
+        if userprofile:
+            od_base = Path(userprofile) / "OneDrive"
+            if od_base.exists() and str(od_base) not in nuvens_nativas:
+                nuvens_nativas.append(str(od_base))
+            
+            # Empresas (OneDrive - NomeDaEmpresa)
+            import glob
+            for match in glob.glob(str(Path(userprofile) / "OneDrive - *")):
+                if str(match) not in nuvens_nativas:
+                    nuvens_nativas.append(str(match))
             
         gdrive_paths = ["G:\\My Drive", os.path.expanduser("~/Google Drive")]
         for gdir in gdrive_paths:
-            if Path(gdir).exists():
-                default_busca_dirs.append(gdir)
+            if Path(gdir).exists() and gdir not in nuvens_nativas:
+                nuvens_nativas.append(gdir)
     else:
         default_busca_dirs = ["~/Documentos", "~/Downloads"]
         default_ignore = [".cache", "node_modules", ".git"]
@@ -176,6 +221,10 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         for default_dir in default_busca_dirs:
             if default_dir not in user_dirs:
                 user_dirs.append(default_dir)
+        # Importante: garantir que as nuvens nativas descobertas agora tb facam parte dos dirs de busca
+        for n in nuvens_nativas:
+            if n not in user_dirs:
+                user_dirs.append(n)
 
     busca = SearchConfig(
         diretorios=user_dirs,
@@ -183,6 +232,7 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         profundidade_nuvem=busca_data.get("profundidade_nuvem", 15),
         ignorar=busca_data.get("ignorar", default_ignore),
         prefixo_nuvem=busca_data.get("prefixo_nuvem", "~/Nuvem"),
+        diretorios_nuvem_nativa=nuvens_nativas
     )
 
     interface = InterfaceConfig(
