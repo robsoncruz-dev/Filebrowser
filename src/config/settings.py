@@ -11,7 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 # Caminho raiz do projeto (dois níveis acima de src/config/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -99,10 +99,17 @@ class SearchConfig:
         for p in base_locais:
             is_cloud = False
             p_str = str(p)
-            for c in self.diretorios_nuvem_nativa:
-                if p_str.startswith(str(Path(c).resolve())):
-                    is_cloud = True
-                    break
+            p_lower = p_str.lower()
+            
+            # Fuzzy check against known Cloud directory names in path
+            if "onedrive" in p_lower or "google drive" in p_lower or "gdrive" in p_lower or "meu drive" in p_lower or "my drive" in p_lower:
+                is_cloud = True
+            else:
+                for c in self.diretorios_nuvem_nativa:
+                    if p_str.startswith(str(Path(c).resolve())):
+                        is_cloud = True
+                        break
+                        
             if not is_cloud:
                 locais_estritos.append(p)
                 
@@ -112,10 +119,20 @@ class SearchConfig:
     def diretorios_nuvem_nativos_expandidos(self) -> list[Path]:
         """Retorna instâncias de pastas locais do Windows que atuam como Nuvens."""
         paths = []
+        
+        # Add explicit paths from settings
         for d in self.diretorios_nuvem_nativa:
             p = Path(d).expanduser().resolve()
             if p.exists() and p.is_dir() and p not in paths:
                 paths.append(p)
+                
+        # Also retroactively extract fuzzy matches from all indexed directories
+        for p in self.diretorios_expandidos:
+            p_str = str(p).lower()
+            if "onedrive" in p_str or "google drive" in p_str or "gdrive" in p_str or "meu drive" in p_str or "my drive" in p_str:
+                if p not in paths:
+                    paths.append(p)
+                    
         return paths
 
     @property

@@ -153,9 +153,9 @@ class FilebrowserWindow(QMainWindow):
         else:
             try:
                 import ctypes
-                # Always on top hint temporarily
-                self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-                self.show()
+                self.raise_()
+                self.activateWindow()
+                self.search_entry.setFocus()
                 
                 hwnd = int(self.winId())
                 user32 = ctypes.windll.user32
@@ -166,10 +166,12 @@ class FilebrowserWindow(QMainWindow):
                 
                 if current_thread_id != foreground_thread_id and foreground_thread_id != 0:
                     user32.AttachThreadInput(current_thread_id, foreground_thread_id, True)
+                    user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
                     user32.SetForegroundWindow(hwnd)
                     user32.ShowWindow(hwnd, 5) # SW_SHOW
                     user32.AttachThreadInput(current_thread_id, foreground_thread_id, False)
                 else:
+                    user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
                     user32.SetForegroundWindow(hwnd)
                     user32.ShowWindow(hwnd, 5)
             except Exception:

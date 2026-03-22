@@ -153,15 +153,15 @@ def apply_shortcut(key: str, wm: str = "", callback=None) -> tuple:
                 try:
                     msg = wintypes.MSG()
                     while globals().get('_win32_hotkey_active', False):
-                        bRet = user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1) # PM_REMOVE
-                        if bRet:
-                            if msg.message == 0x0312 and msg.wParam == HOTKEY_ID: # WM_HOTKEY
-                                if cb:
-                                    from PyQt6.QtCore import QTimer
-                                    QTimer.singleShot(0, cb)
-                            user32.TranslateMessage(ctypes.byref(msg))
-                            user32.DispatchMessageW(ctypes.byref(msg))
-                        time.sleep(0.01)
+                        bRet = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                        if bRet == 0 or bRet == -1:
+                            break
+                        if msg.message == 0x0312 and msg.wParam == HOTKEY_ID: # WM_HOTKEY
+                            if cb:
+                                from PyQt6.QtCore import QTimer
+                                QTimer.singleShot(0, cb)
+                        user32.TranslateMessage(ctypes.byref(msg))
+                        user32.DispatchMessageW(ctypes.byref(msg))
                 finally:
                     user32.UnregisterHotKey(None, HOTKEY_ID)
 
@@ -231,7 +231,12 @@ def remove_shortcut_from_config():
 def apply_saved_shortcut(callback=None):
     """Aplica o atalho salvo no WM (chamado no startup do app). Silencioso."""
     try:
+        from src.search.indexer import get_metadata, set_metadata
         saved = get_metadata("shortcut", "")
+        if not saved:
+            saved = "alt+space"
+            set_metadata("shortcut", saved)
+            
         if saved:
             return apply_shortcut(saved, callback=callback)
     except Exception as e:
