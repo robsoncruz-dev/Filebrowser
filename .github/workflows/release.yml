@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install Ruby and FPM
         run: |
@@ -98,13 +98,13 @@ jobs:
           mkdir -p AppDir/opt/filebrowser
           cp -r src AppDir/opt/filebrowser/
           
-          python-appimage build app --python-version 3.10 AppDir
+          python-appimage build app --python-version 3.12 AppDir
           
           cat << 'EOF' > AppDir/AppRun
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
           export PYTHONPATH="${HERE}/opt/filebrowser:${PYTHONPATH}"
-          exec "${HERE}/opt/python3.10/bin/python3" -m src.main "$@"
+          exec "${HERE}/opt/python3.12/bin/python3" -m src.main "$@"
           EOF
           chmod +x AppDir/AppRun
           
@@ -152,7 +152,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install Python Dependencies
         run: |
