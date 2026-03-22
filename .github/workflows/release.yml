@@ -19,6 +19,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Inject Semantic Version
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          if [[ "$VERSION" != "main" && -n "$VERSION" ]]; then
+            sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/g" src/config/settings.py || true
+            sed -i "s/version = .*/version = \"$VERSION\"/g" pyproject.toml || true
+            sed -i "s/APP_VERSION=.*/APP_VERSION=\"$VERSION\"/g" scripts/build_deb.sh || true
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -148,6 +159,16 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Inject Semantic Version
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          if [[ "$VERSION" != "main" && -n "$VERSION" ]]; then
+            sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/g" src/config/settings.py || true
+            sed -i "s/#define AppVersion .*/#define AppVersion \"$VERSION\"/g" scripts/installer.iss || true
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
