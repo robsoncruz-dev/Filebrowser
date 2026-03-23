@@ -21,9 +21,10 @@ def test_platform_is_linux_or_windows():
 # ─── is_windows ──────────────────────────────────────────────────────────────
 
 
-def test_is_windows_on_linux():
-    """No ambiente Linux de testes, is_windows deve ser False."""
-    assert platform.is_windows is False
+def test_platform_is_windows_matches_sys():
+    import sys
+    expected = (sys.platform == "win32")
+    assert platform.is_windows == expected
 
 
 def test_linux_platform_is_windows_false():

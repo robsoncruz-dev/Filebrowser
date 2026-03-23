@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from src.platform import platform
 
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 # Caminho raiz do projeto (dois níveis acima de src/config/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent

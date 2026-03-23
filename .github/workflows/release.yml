@@ -37,8 +37,10 @@ jobs:
 
       - name: Run Tests
         run: |
+          pip install -r requirements.txt
           pip install pytest
-          python -m pytest tests/ -v
+          sudo apt-get update && sudo apt-get install -y xvfb
+          xvfb-run python -m pytest tests/ -v
 
       - name: Install Ruby and FPM
         run: |
