@@ -8,7 +8,7 @@ Launcher estilo Spotlight para busca e abertura de arquivos PDF.
 import sys
 
 from src.config.settings import load_config
-from src.ui.window import FilebrowserApp
+from src.ui.tray import FilebrowserApp
 
 
 def main() -> int:

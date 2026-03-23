@@ -4,6 +4,8 @@ Filebrowser — Janela de Doação
 Permite ao usuário contribuir com o projeto via PayPal, cripto ou PIX.
 """
 
+from __future__ import annotations
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QFrame, QApplication
@@ -123,5 +125,6 @@ class DonateWindow(QDialog):
 
     def _copy_to_clipboard(self, text):
         clipboard = QApplication.clipboard()
-        clipboard.setText(text)
+        if clipboard is not None:
+            clipboard.setText(text)
         self.status_label.setText(t("don_copied"))

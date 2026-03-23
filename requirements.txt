@@ -1,3 +1,2 @@
 PyQt6>=6.6.0
-keyboard
-psutil
+psutil; sys_platform == "win32"

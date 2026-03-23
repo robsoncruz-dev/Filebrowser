@@ -6,25 +6,19 @@ Carrega e gerencia as configurações da aplicação a partir do config.toml.
 
 import tomllib
 import os
-import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from src.platform import platform
 
-__version__ = "0.4.4"
+
+__version__ = "0.5.0"
 
 # Caminho raiz do projeto (dois níveis acima de src/config/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Define directories based on the OS
-if sys.platform == "win32":
-    app_data = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming"))
-    local_app_data = Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-    USER_CONFIG_DIR = app_data / "Filebrowser"
-    CACHE_DIR = local_app_data / "Filebrowser" / "Cache"
-else:
-    USER_CONFIG_DIR = Path.home() / ".config" / "filebrowser"
-    CACHE_DIR = Path.home() / ".cache" / "filebrowser"
+# Define directories based on the OS (delegado ao platform)
+USER_CONFIG_DIR, CACHE_DIR = platform.get_config_dirs()
 
 USER_CONFIG_FILE = USER_CONFIG_DIR / "config.toml"
 PROJECT_CONFIG_FILE = PROJECT_ROOT / "config.toml"
@@ -38,11 +32,7 @@ DB_PATH = CACHE_DIR / "index.db"
 @dataclass
 class SearchConfig:
     """Configurações de busca."""
-    if sys.platform == "win32":
-        # Pastas comuns no Windows
-        default_dirs = ["~/Documents", "~/Downloads"]
-    else:
-        default_dirs = ["~/Documentos", "~/Downloads"]
+    default_dirs = platform.get_default_dirs()
 
     diretorios: list[str] = field(default_factory=lambda: SearchConfig.default_dirs)
     profundidade_local: int = 5
@@ -61,29 +51,11 @@ class SearchConfig:
             if p.exists() and p.is_dir() and p not in paths:
                 paths.append(p)
                 
-        # Detecção Híbrida Mídia Externa (Discos e HDs secundarios via psutil)
-        try:
-            import psutil
-            for part in psutil.disk_partitions(all=False):
-                if not part.mountpoint or 'cdrom' in part.opts or part.fstype == '':
-                    continue
+        # Detecção Híbrida Mídia Externa (delegado ao platform)
+        for mp in platform.get_extra_disk_paths():
+            if mp not in paths:
+                paths.append(mp)
                 
-                mp = Path(part.mountpoint).resolve()
-                
-                if sys.platform == "win32":
-                    # Evitar C:\ root para não varrer sistema, pois ~/ já é lido no C:
-                    if str(mp).upper().startswith("C:\\"):
-                        continue
-                else:
-                    # Em Linux, evitar root, /boot e dependências do sistema
-                    if str(mp) == "/" or str(mp).startswith("/boot") or str(mp).startswith("/snap"):
-                        continue
-                        
-                if mp.exists() and mp.is_dir() and mp not in paths:
-                    paths.append(mp)
-        except (ImportError, OSError):
-            pass
-            
         return paths
 
     @property
@@ -198,50 +170,24 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     # Suporte a profundidade separada (fallback para profundidade_maxima se existir)
     prof_fallback = busca_data.get("profundidade_maxima", 5)
     
-    nuvens_nativas = []
+    # Detecção de nuvens nativas (delegado ao platform)
+    nuvens_nativas = platform.detect_native_clouds()
     
-    if sys.platform == "win32":
-        default_busca_dirs = ["~/Documents", "~/Downloads"]
-        default_ignore = [".cache", "node_modules", ".git", "AppData", "Local Settings"]
-        
-        # Identificação Ocorrente de Nuvens Nativas Windows (OneDrive/GDrive)
-        # Tenta pegar todas as variaveis possiveis de OneDrive
-        for od_key in ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"]:
-            od_val = os.environ.get(od_key)
-            if od_val and Path(od_val).exists() and od_val not in nuvens_nativas:
-                nuvens_nativas.append(od_val)
-                
-        # Busca física (Fallbacks)
-        userprofile = os.environ.get("USERPROFILE", "")
-        if userprofile:
-            od_base = Path(userprofile) / "OneDrive"
-            if od_base.exists() and str(od_base) not in nuvens_nativas:
-                nuvens_nativas.append(str(od_base))
-            
-            # Empresas (OneDrive - NomeDaEmpresa)
-            import glob
-            for match in glob.glob(str(Path(userprofile) / "OneDrive - *")):
-                if str(match) not in nuvens_nativas:
-                    nuvens_nativas.append(str(match))
-            
-        gdrive_paths = ["G:\\My Drive", os.path.expanduser("~/Google Drive")]
-        for gdir in gdrive_paths:
-            if Path(gdir).exists() and gdir not in nuvens_nativas:
-                nuvens_nativas.append(gdir)
-    else:
-        default_busca_dirs = ["~/Documentos", "~/Downloads"]
-        default_ignore = [".cache", "node_modules", ".git"]
+    default_busca_dirs = platform.get_default_dirs()
+    default_ignore = platform.get_default_ignore()
 
     # Mesclar com as configurações do usuário sem duplicatas
     user_dirs = busca_data.get("diretorios", default_busca_dirs)
-    if sys.platform == "win32":
-        for default_dir in default_busca_dirs:
-            if default_dir not in user_dirs:
-                user_dirs.append(default_dir)
-        # Importante: garantir que as nuvens nativas descobertas agora tb facam parte dos dirs de busca
-        for n in nuvens_nativas:
-            if n not in user_dirs:
-                user_dirs.append(n)
+    
+    # Garantir dirs padrão presentes
+    for default_dir in default_busca_dirs:
+        if default_dir not in user_dirs:
+            user_dirs.append(default_dir)
+    
+    # Garantir que as nuvens nativas descobertas tb façam parte dos dirs de busca
+    for n in nuvens_nativas:
+        if n not in user_dirs:
+            user_dirs.append(n)
 
     busca = SearchConfig(
         diretorios=user_dirs,

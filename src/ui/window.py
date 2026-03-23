@@ -4,21 +4,22 @@ Filebrowser — Janela Principal (Spotlight)
 Interface PyQt6 flutuante estilo Spotlight para busca e abertura de PDFs.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import signal
 import subprocess
 import threading
 from pathlib import Path
-import sys
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QLabel,
-    QFrame, QPushButton, QSystemTrayIcon, QMenu
+    QFrame, QPushButton,
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QEvent, QPoint
-from PyQt6.QtGui import QKeyEvent, QIcon, QAction
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QEvent
+from PyQt6.QtGui import QKeyEvent
 
 from src.search.finder import search_pdfs
 from src.search.indexer import (
@@ -30,6 +31,7 @@ from src.search.indexer import (
 
 from src.config.settings import AppConfig, CACHE_DIR
 from src.i18n import t, load_saved_language
+from src.platform import open_file, platform
 
 # Carregar idioma salvo antes de construir a UI
 load_saved_language()
@@ -61,7 +63,7 @@ class FilebrowserWindow(QMainWindow):
         self._cloud_count = 0
         self._last_cloud_ref = 0
         self._prompt_visible = False
-        self._cloud_thread = None
+        self._cloud_thread: threading.Thread | None = None
         self._indexing = False
 
         self._signals = IndexSignals()
@@ -109,73 +111,27 @@ class FilebrowserWindow(QMainWindow):
         else:
             self.status_label.setText(t("no_indexed"))
 
-    def showEvent(self, event):
-        super().showEvent(event)
+    def showEvent(self, a0):
+        super().showEvent(a0)
         QTimer.singleShot(50, self._force_floating)
 
-    def changeEvent(self, event):
-        if event.type() == QEvent.Type.ActivationChange:
+    def changeEvent(self, a0):
+        if a0 is not None and a0.type() == QEvent.Type.ActivationChange:
             if not self.isActiveWindow():
                 self._check_and_close()
-        super().changeEvent(event)
-
-    @staticmethod
-    def _detect_wm() -> str:
-        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-        session = os.environ.get("DESKTOP_SESSION", "").lower()
-        combined = f"{desktop} {session}"
-        if "i3" in combined: return "i3"
-        if "sway" in combined: return "sway"
-        return "generic"
+        super().changeEvent(a0)
 
     def _force_floating(self):
         # Center the window
-        screen = QApplication.primaryScreen().geometry()
+        primary = QApplication.primaryScreen()
+        if primary is None:
+            return
+        screen = primary.geometry()
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
 
-        if sys.platform != "win32":
-            wm = self._detect_wm()
-            try:
-                if wm == "i3":
-                    subprocess.Popen(
-                        ["i3-msg", "floating enable, move position center, border pixel 2"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    )
-                elif wm == "sway":
-                    subprocess.Popen(
-                        ["swaymsg", "floating enable, move position center"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    )
-            except FileNotFoundError:
-                pass
-        else:
-            try:
-                import ctypes
-                self.raise_()
-                self.activateWindow()
-                self.search_entry.setFocus()
-                
-                hwnd = int(self.winId())
-                user32 = ctypes.windll.user32
-                kernel32 = ctypes.windll.kernel32
-                
-                current_thread_id = kernel32.GetCurrentThreadId()
-                foreground_thread_id = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), 0)
-                
-                if current_thread_id != foreground_thread_id and foreground_thread_id != 0:
-                    user32.AttachThreadInput(current_thread_id, foreground_thread_id, True)
-                    user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
-                    user32.SetForegroundWindow(hwnd)
-                    user32.ShowWindow(hwnd, 5) # SW_SHOW
-                    user32.AttachThreadInput(current_thread_id, foreground_thread_id, False)
-                else:
-                    user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
-                    user32.SetForegroundWindow(hwnd)
-                    user32.ShowWindow(hwnd, 5)
-            except Exception:
-                pass
+        platform.force_foreground(self)
 
     def _build_ui(self):
         central = QWidget()
@@ -270,8 +226,9 @@ class FilebrowserWindow(QMainWindow):
 
         main_layout.addWidget(status_box)
 
-    def eventFilter(self, obj, event):
-        if obj == self.search_entry and event.type() == QEvent.Type.KeyPress:
+    def eventFilter(self, a0, a1):
+        if a0 == self.search_entry and a1 is not None and a1.type() == QEvent.Type.KeyPress:
+            event: QKeyEvent = a1  # type: ignore[assignment]
             if event.key() == Qt.Key.Key_Escape:
                 if self._prompt_visible:
                     self._hide_prompt()
@@ -290,7 +247,7 @@ class FilebrowserWindow(QMainWindow):
             elif event.key() == Qt.Key.Key_Tab:
                 self._navigate_results(1)
                 return True
-        return super().eventFilter(obj, event)
+        return super().eventFilter(a0, a1)
 
     def _navigate_results(self, direction: int):
         if not self._results:
@@ -327,10 +284,10 @@ class FilebrowserWindow(QMainWindow):
         self._cloud_thread = threading.Thread(target=self._index_thread, daemon=True)
         self._cloud_thread.start()
 
-    def _on_local_found(self, count: int, pdf: dict = None):
+    def _on_local_found(self, count: int, pdf: dict | None = None):
         self._signals.local_found.emit(count, pdf)
 
-    def _on_cloud_found(self, count: int, pdf: dict = None):
+    def _on_cloud_found(self, count: int, pdf: dict | None = None):
         self._signals.cloud_found.emit(count, pdf)
 
     def _on_local_found_signal(self, count, pdf):
@@ -410,19 +367,11 @@ class FilebrowserWindow(QMainWindow):
         self._update_tray_state()
 
     def _send_notification(self, total: int):
-        if sys.platform == "win32": return
-        try:
-            if not self.isVisible():
-                subprocess.Popen(
-                    [
-                        "notify-send", "📄 Filebrowser",
-                        f"Indexação concluída — {total} PDFs encontrados",
-                        "--icon=document-open", "--urgency=low"
-                    ],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-        except (FileNotFoundError, OSError):
-            pass
+        if not self.isVisible():
+            platform.send_notification(
+                "📄 Filebrowser",
+                f"Indexação concluída — {total} PDFs encontrados",
+            )
 
     def _update_counter_cloud_slow(self):
         self.counter_label.setText(f"📂 {self._local_count} locais  ·  ☁ aguardando...")
@@ -556,21 +505,9 @@ class FilebrowserWindow(QMainWindow):
                 QApplication.restoreOverrideCursor()
 
         try:
-            if sys.platform == "win32" and leitor.lower() not in ["zathura", "evince", "okular"]:
-                os.startfile(caminho)
-            else:
-                subprocess.Popen(
-                    [leitor, caminho],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-        except FileNotFoundError:
-            if sys.platform == "win32":
-                os.startfile(caminho)
-            else:
-                subprocess.Popen(
-                    ["xdg-open", caminho],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
+            open_file(caminho, leitor)
+        except Exception:
+            pass
 
         if self.config.geral.fechar_apos_abrir:
             self._hide_window()
@@ -615,129 +552,3 @@ class FilebrowserWindow(QMainWindow):
                 self.status_label.text()
             )
 
-
-class FilebrowserApp:
-    def __init__(self, config: AppConfig):
-        self.config = config
-        self.app = QApplication(sys.argv)
-        self.app.setQuitOnLastWindowClosed(False)
-        self._win = None
-        self._tray = None
-        self._item_status = None
-
-    def run(self, argv):
-        # Create Main Window
-        self._win = FilebrowserWindow(self.app, self.config, self)
-
-        # Build tray icon natively
-        self._build_tray()
-
-        from src.ui.settings_ui import apply_saved_shortcut, _detect_wm
-        success, msg = apply_saved_shortcut(callback=self._on_tray_show)
-        
-        if success is False and _detect_wm() == "windows":
-            self._on_tray_settings()
-
-        return self.app.exec()
-
-    def _build_tray(self):
-        self._tray = QSystemTrayIcon(self._win)
-        self._tray.setIcon(QIcon.fromTheme("folder"))
-        self._tray.setToolTip("Filebrowser")
-        
-        menu = QMenu()
-        self._item_status = QAction(t("tray_title"), self._win)
-        self._item_status.setEnabled(False)
-        menu.addAction(self._item_status)
-        menu.addSeparator()
-
-        item_show = QAction(t("tray_show"), self._win)
-        item_show.triggered.connect(self._on_tray_show)
-        menu.addAction(item_show)
-
-        item_reindex = QAction(t("tray_reindex"), self._win)
-        item_reindex.triggered.connect(self._on_tray_reindex)
-        menu.addAction(item_reindex)
-
-        menu.addSeparator()
-
-        item_settings = QAction(t("tray_settings"), self._win)
-        item_settings.triggered.connect(self._on_tray_settings)
-        menu.addAction(item_settings)
-
-        item_about = QAction(t("tray_about"), self._win)
-        item_about.triggered.connect(self._on_tray_about)
-        menu.addAction(item_about)
-
-        item_feedback = QAction(t("tray_feedback"), self._win)
-        item_feedback.triggered.connect(self._on_tray_feedback)
-        menu.addAction(item_feedback)
-
-        item_donate = QAction(t("tray_donate"), self._win)
-        item_donate.triggered.connect(self._on_tray_donate)
-        menu.addAction(item_donate)
-
-        menu.addSeparator()
-
-        item_quit = QAction(t("tray_quit"), self._win)
-        item_quit.triggered.connect(self._on_tray_quit)
-        menu.addAction(item_quit)
-
-        self._tray.setContextMenu(menu)
-        self._tray.activated.connect(self._on_tray_activated)
-        self._tray.show()
-
-    def _on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self._on_tray_show()
-
-    def _on_tray_show(self):
-        self._win.show()
-        self._win.activateWindow()
-        QTimer.singleShot(50, self._win._force_floating)
-
-    def _on_tray_reindex(self):
-        self._win.show()
-        self._win.activateWindow()
-        QTimer.singleShot(50, self._win._force_floating)
-        QTimer.singleShot(50, self._win._start_background_index)
-
-    def _on_tray_settings(self):
-        from src.ui.settings_ui import SettingsWindow
-        win = SettingsWindow(self._win)
-        win.show()
-
-    def _on_tray_about(self):
-        from src.ui.about import AboutWindow
-        win = AboutWindow(self._win)
-        win.show()
-
-    def _on_tray_feedback(self):
-        from src.ui.feedback import FeedbackWindow
-        win = FeedbackWindow(self._win)
-        win.show()
-
-    def _on_tray_donate(self):
-        from src.ui.donate import DonateWindow
-        win = DonateWindow(self._win)
-        win.show()
-
-    def _on_tray_quit(self):
-        QApplication.quit()
-
-    def update_tray_state(self, indexing, local_count, cloud_count, status_text):
-        if not self._tray or not self._item_status:
-            return
-            
-        icon_theme = "folder-download" if indexing else "folder"
-        self._tray.setIcon(QIcon.fromTheme(icon_theme))
-
-        if indexing:
-            label = t("tray_indexing", local=local_count, cloud=cloud_count)
-        elif local_count + cloud_count > 0:
-            label = t("tray_indexed", n=local_count + cloud_count)
-        else:
-            label = t("tray_title")
-
-        self._tray.setToolTip(label)
-        self._item_status.setText(label)

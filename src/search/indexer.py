@@ -9,6 +9,7 @@ dos arquivos PDF encontrados. Suporta indexação incremental delta e por fase
 import os
 import sqlite3
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -66,13 +67,15 @@ def get_metadata(key: str, default: str = "", db_path: Path | None = None) -> st
     if not path.exists():
         return default
     conn = sqlite3.connect(str(path))
+    result: str = default
     try:
         row = conn.execute(
             "SELECT valor FROM metadata WHERE chave = ?", (key,)
         ).fetchone()
-        return row[0] if row else default
+        result = row[0] if row else default
     finally:
         conn.close()
+    return result
 
 
 def get_counts_by_source(db_path: Path | None = None) -> dict[str, int]:
@@ -82,19 +85,19 @@ def get_counts_by_source(db_path: Path | None = None) -> dict[str, int]:
         return {"local": 0, "nuvem": 0}
 
     conn = sqlite3.connect(str(path))
+    counts: dict[str, int] = {"local": 0, "nuvem": 0}
     try:
         rows = conn.execute(
             "SELECT fonte, COUNT(*) FROM pdfs GROUP BY fonte"
         ).fetchall()
-        counts = {"local": 0, "nuvem": 0}
         for fonte, count in rows:
             if fonte == "nuvem_nativa":
                 counts["nuvem"] = counts.get("nuvem", 0) + count
             else:
                 counts[fonte] = counts.get(fonte, 0) + count
-        return counts
     finally:
         conn.close()
+    return counts
 
 
 def get_last_indexed_at(db_path: Path | None = None) -> str:
@@ -168,7 +171,7 @@ def scan_directory_list(
     diretorios: list[Path],
     max_depth: int,
     ignorar: list[str],
-    on_found: callable = None,
+    on_found: Callable[..., None] | None = None,
 ) -> list[dict]:
     """
     Varre uma lista de diretórios em paralelo usando ThreadPoolExecutor.
@@ -179,7 +182,7 @@ def scan_directory_list(
     max_workers = min(32, (os.cpu_count() or 1) * 4)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_scandir_recursive, str(d), max_depth, ignorar_set): d 
+            executor.submit(lambda d=d: _scandir_recursive(str(d), max_depth, ignorar_set)): d  # pyre-ignore[6]
             for d in diretorios if d.exists()
         }
         
@@ -187,9 +190,10 @@ def scan_directory_list(
             try:
                 batch = future.result()
                 todas_pdfs.extend(batch)
-                if on_found and batch:
+                cb = on_found
+                if cb is not None and batch:
                     # Emite um relatório por lote resolvido
-                    on_found(len(todas_pdfs), batch[-1])
+                    cb(len(todas_pdfs), batch[-1])
             except Exception:
                 pass
 
@@ -260,7 +264,7 @@ def _delta_sync(conn: sqlite3.Connection, pdfs: list[dict], fonte: str) -> int:
 def build_index_local(
     config: AppConfig,
     db_path: Path | None = None,
-    on_found: callable = None,
+    on_found: Callable[..., None] | None = None,
 ) -> int:
     """
     Indexa as pastas LOCAIS usando delta sync (rápido).
@@ -290,7 +294,7 @@ def build_index_local(
     return count_local + count_nativa
 
 
-def scan_cloud(config: AppConfig, on_found: callable = None) -> list[dict]:
+def scan_cloud(config: AppConfig, on_found: Callable[..., None] | None = None) -> list[dict]:
     """
     Varre instâncias de nuvem headless registradas usando `rclone lsjson` de forma assíncrona.
     Não depende de rclone mounte FUSE.
@@ -355,13 +359,14 @@ def scan_cloud(config: AppConfig, on_found: callable = None) -> list[dict]:
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=max(1, len(remotes))) as executor:
-        futures = {executor.submit(_fetch_remote, r): r for r in remotes.keys()}
+        futures = {executor.submit(lambda r=r: _fetch_remote(r)): r for r in remotes.keys()}  # pyre-ignore[6]
         for future in as_completed(futures):
             try:
                 batch = future.result()
                 todas_pdfs.extend(batch)
-                if on_found and batch:
-                    on_found(len(todas_pdfs), batch[-1])
+                cb = on_found
+                if cb is not None and batch:
+                    cb(len(todas_pdfs), batch[-1])
             except Exception:
                 pass
 
@@ -426,7 +431,7 @@ def build_index_cloud(
     config: AppConfig,
     db_path: Path | None = None,
     timeout: int = 30,
-    on_found: callable = None,
+    on_found: Callable[..., None] | None = None,
 ) -> int:
     """Atalho para compatibilidade. Retorna contagem ou -1 em timeout."""
     import threading

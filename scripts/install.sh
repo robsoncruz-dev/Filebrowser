@@ -5,7 +5,8 @@
 set -e
 
 APP_NAME="Filebrowser"
-APP_VERSION="0.3.3"
+SCRIPT_DIR_TMP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_VERSION="$(grep -m1 '^version' "$(dirname "$SCRIPT_DIR_TMP")/pyproject.toml" | sed 's/.*"\(.*\)".*/\1/')"
 INSTALL_DIR="$HOME/.local/share/filebrowser"
 BIN_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/filebrowser"
