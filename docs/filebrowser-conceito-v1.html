@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Filebrowser — apresentação</title>
+<style>
+  @page{ size:A4; margin:15mm 14mm; }
+  :root{
+    --bg:#0e1220; --paper:#151a2b; --ink:#e6eaf5; --dim:#8b95b5; --line:#2a3149;
+    --accent:#5b8cff; --accent2:#8f7bff; --ok:#49c17a; --warn:#e0a53b;
+    --sans:"DejaVu Sans","Segoe UI",system-ui,sans-serif; --mono:"DejaVu Sans Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{ background:#0a0d18; color:var(--ink); font:14px/1.6 var(--sans); padding:20px; }
+  .app{ max-width:196mm; margin:0 auto; background:var(--bg); border:1px solid var(--line); border-radius:14px; overflow:hidden }
+  .hero{ padding:26px 30px 20px; background:linear-gradient(120deg,#182142,#151a2b); }
+  .hero h1{ font-size:28px; letter-spacing:-.4px }
+  .hero h1 b{ color:var(--accent) }
+  .hero .tag{ color:var(--dim); margin-top:5px; max-width:64ch; font-size:14px }
+  /* mock command palette */
+  .palette{ margin:18px 0 4px; background:#0b1020; border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 30px #0006; overflow:hidden; max-width:520px }
+  .palette .search{ display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line); font-family:var(--mono) }
+  .palette .search .mag{ color:var(--accent); font-size:16px }
+  .palette .search .q{ color:var(--ink) } .palette .search .cur{ color:var(--accent); animation:none }
+  .palette .res{ padding:6px 0 }
+  .palette .row{ display:flex; align-items:center; gap:10px; padding:7px 16px; font-size:12.5px }
+  .palette .row.on{ background:#16204a }
+  .palette .row .ic{ color:#d1622a } .palette .row .p{ color:var(--dim); font-family:var(--mono); font-size:11px; margin-left:auto }
+  .in{ padding:22px 30px 26px }
+  h2{ font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); margin:22px 0 11px }
+  p{ margin:0 0 11px; max-width:66ch } .dim{color:var(--dim)} b{color:#fff}
+  .feat{ display:grid; grid-template-columns:1fr 1fr; gap:9px 22px }
+  .feat div{ font-size:13.5px; padding-left:22px; position:relative }
+  .feat div::before{ content:"▸"; position:absolute; left:2px; color:var(--accent) }
+  code{ font-family:var(--mono); background:#0b1020; color:var(--accent); padding:0 5px; border-radius:4px; font-size:12.5px; border:1px solid var(--line) }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 26px }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:4px }
+  td,th{ border:1px solid var(--line); padding:6px 9px; text-align:left }
+  th{ background:#0b1020; color:var(--accent); font-size:10.5px; text-transform:uppercase; letter-spacing:.5px }
+  .eval{ border:1.5px solid var(--warn); border-radius:10px; background:#201c10; padding:14px 17px; margin:6px 0 }
+  .eval h3{ font-size:13px; color:var(--warn); margin-bottom:6px } .eval p{ font-size:13px; color:#d8c39a; margin-bottom:5px }
+  footer{ padding:13px 30px; border-top:1px solid var(--line); color:var(--dim); font-size:11px }
+  @media print{
+    body{ background:#fff; padding:0 }
+    :root{ --bg:#fff; --paper:#fff; --ink:#15192a; --dim:#5a637a; --line:#c8cee0; --accent:#33489c; --accent2:#5a45b0; --warn:#8a6400 }
+    .app{ border-color:#c8cee0 } .hero{ background:#eef1fb; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+    .palette{ background:#f5f7fe } .palette .row.on{ background:#e6ecfd } code{ background:#eef1fb }
+    .eval{ background:#fdf6ec } .eval p{ color:#6b4d1e } th{ background:#eef1fb }
+  }
+  h1,h2,h3{break-after:avoid} table,tr,.eval,.palette{break-inside:avoid}
+</style></head>
+<body>
+<a class="zen-dashbtn" href="http://10.10.0.1:8100/" style="position:fixed;top:10px;left:10px;z-index:99999;font:600 12.5px/1 system-ui,sans-serif;text-decoration:none;color:#fff;background:rgba(30,30,30,.85);padding:7px 13px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.28)">← Dashboard</a>
+<style>@media print{.zen-dashbtn{display:none!important}}</style>
+
+<div class="app">
+  <div class="hero">
+    <h1>File<b>browser</b></h1>
+    <div class="tag">Launcher estilo Spotlight para achar e abrir PDFs no Linux em milissegundos: um atalho, você digita o nome, e o arquivo abre. Multiplataforma, empacotado.</div>
+    <div class="palette">
+      <div class="search"><span class="mag">🔍</span><span class="q">relatório gol</span><span class="cur">▏</span></div>
+      <div class="res">
+        <div class="row on"><span class="ic">📄</span> golzen-relatorio-tecnico-v17.pdf <span class="p">~/hobby/GolZen</span></div>
+        <div class="row"><span class="ic">📄</span> relatorio-fase-v2.pdf <span class="p">~/hobby/loto…</span></div>
+        <div class="row"><span class="ic">☁️</span> parecer-m3.pdf <span class="p">OneDrive</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="in">
+    <p>Ferramenta madura e distribuível: busca instantânea sobre PDFs locais <b>e</b> na nuvem (OneDrive/Google Drive via rclone), indexação incremental e pacotes prontos para instalar. Na versão <code>0.5.1</code>.</p>
+
+    <h2>Recursos</h2>
+    <div class="feat">
+      <div>Busca instantânea por nome</div>
+      <div>Indexa nuvem (OneDrive/GDrive via <code>rclone</code>)</div>
+      <div>Delta sync — só atualiza o que mudou</div>
+      <div>Progresso visual da indexação</div>
+      <div>Roda em i3, Sway, GNOME, KDE, XFCE</div>
+      <div>Pacotes <code>.deb</code> + instalador Windows</div>
+    </div>
+
+    <h2>Avaliação honesta</h2>
+    <div class="eval">
+      <h3>⚠ Documentação atrás do código</h3>
+      <p>O código está em <code>0.5.1</code> (pyproject), mas o <b>CHANGELOG</b> para em <code>0.2.0</code> e o badge do README diz <b>GTK4</b> enquanto as dependências reais são <b>PyQt6</b> (houve migração de toolkit não refletida). Não é bug — é doc desatualizada, mesma classe do gate que o Zen combate.</p>
+      <p><b>Próximo passo, se reabrir:</b> alinhar README/CHANGELOG ao estado real (Qt, 0.5.1) e travar a versão do doc via §Documentos 12.</p>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <h2>Stack</h2>
+        <table>
+          <tr><th>Camada</th><th>Escolha</th></tr>
+          <tr><td>Linguagem</td><td>Python 3.10+</td></tr>
+          <tr><td>UI</td><td>Qt (PyQt6)</td></tr>
+          <tr><td>Nuvem</td><td>rclone (OneDrive/GDrive)</td></tr>
+          <tr><td>Distribuição</td><td>.deb · AppImage · Windows</td></tr>
+        </table>
+      </div>
+      <div>
+        <h2>Estado</h2>
+        <p style="font-size:13px"><b>Operacional</b> — v0.5.1, 31 commits, público (MIT) em <code>robsoncruz-dev/Filebrowser</code>. Tem também um app <b>Android</b> companheiro (<code>Filebrowser-android</code>), ainda embrionário (1 commit).</p>
+      </div>
+    </div>
+  </div>
+  <footer>Filebrowser · apresentação v1 · gerado #C0184 (2026-07-26) · avaliação do repositório (v0.5.1, 31 commits). Versão viva via zen-doc-version.sh (§Documentos 12).</footer>
+</div>
+</body></html>
