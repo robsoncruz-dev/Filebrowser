@@ -2,9 +2,24 @@
 
 **Launcher estilo Spotlight para busca e abertura de PDFs no Linux.**
 
+> ⚠️ **Aferido em 2026-09-10 (#C0388) — a doc estava atrás do código, e o commit
+> de 2026-07-26 já dizia isso sem que ninguém corrigisse o README.**
+> **(1) Toolkit:** o projeto migrou de **GTK4 para PyQt6** (`src/ui/*.py`,
+> `src/hotkeys.py`, `src/platform.py`; zero `gi.require_version` restante) — o
+> selo acima está corrigido. **(2) Versão:** `pyproject.toml` marca **0.5.1**,
+> enquanto o `CHANGELOG.md` para na **0.2.0** (2026-03-08): três versões sem
+> registro. **(3) Não está ligado ao i3** — não há `bindsym` para ele no
+> `~/.config/i3/config`, então o "pressione um atalho" abaixo depende de o
+> usuário criar o atalho.
+>
+> ⓘ **Nota de contexto, não de defeito:** a feature *system tray* contraria a
+> Filosofia Zen nº 2 ("zero system tray") da máquina do Robson. Aqui isso é
+> legítimo — este projeto é distribuível para terceiros, não parte do ambiente
+> Zen —, mas fica dito para ninguém "consertar" o Zen achando que é incoerência.
+
 Encontre qualquer PDF no seu sistema em milissegundos. Pressione um atalho de teclado, digite o nome, e pronto.
 
-![GTK4](https://img.shields.io/badge/GTK-4.0-blue)
+![PyQt6](https://img.shields.io/badge/PyQt-6-blue)
 ![Python](https://img.shields.io/badge/Python-3.10+-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
